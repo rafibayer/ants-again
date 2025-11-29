@@ -44,7 +44,7 @@ func (p Vector) Sub(other Vector) Vector {
 }
 
 func (p Vector) Magnitude() float64 {
-	return math.Sqrt(p.x*p.x + p.y + p.y)
+	return math.Sqrt(p.x*p.x + p.y*p.y)
 }
 
 func (p Vector) Normalize() Vector {
@@ -78,9 +78,10 @@ func FindWithin(tree *kdtree.KDTree, center Vector, radius float64) []kdtree.Poi
 	points := tree.RangeSearch(kdrange.New(xMin, xMax, yMin, yMax))
 	result := make([]kdtree.Point, 0)
 
-	for _, p := range points {
-		if p.(Vector).Distance(center) <= radius {
-			result = append(result, p)
+	for _, point := range points {
+		vec := Vector{x: point.Dimension(0), y: point.Dimension(1)}
+		if vec.Distance(center) <= radius {
+			result = append(result, point)
 		}
 	}
 

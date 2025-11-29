@@ -21,16 +21,14 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	drawScreenSpace(g, screen)
 
+	// translate op for drawing world in screen space with pan and zoom
 	op := &ebiten.DrawImageOptions{}
-
-	// --- IMPORTANT ORDER ---
 	op.GeoM.Translate(-g.camX, -g.camY)       // Pan (world space)
 	op.GeoM.Translate(-screenW/2, -screenH/2) //  Move pivot to center of screen
 	op.GeoM.Scale(g.zoom, g.zoom)             // Zoom
 	op.GeoM.Translate(screenW/2, screenH/2)   //  Move pivot back
 
-	///// draw in world space
-	drawWorldSpace(g, g.world)
+	drawWorldSpace(g)
 
 	screen.DrawImage(g.world, op)
 
@@ -38,17 +36,19 @@ func (g *Game) Draw(screen *ebiten.Image) {
 }
 
 func drawScreenSpace(_ *Game, screen *ebiten.Image) {
-	ebitenutil.DebugPrint(screen, fmt.Sprintf("%.0f", ebiten.ActualFPS()))
+	ebitenutil.DebugPrint(screen, fmt.Sprintf("FPS: %.0f\nTPS: %.0f", ebiten.ActualFPS(), ebiten.ActualTPS()))
 }
 
-func drawWorldSpace(g *Game, world *ebiten.Image) {
-	ebitenutil.DebugPrint(world, "Worldspace")
-
-	// game world bounding box
-	vector.StrokeRect(g.world, 0, 0, 1000, 1000, 5, color.White, true)
+// drawCalls should be ordered from back to front.
+func drawWorldSpace(g *Game) {
+	// has to be first because of use of "writePixels"
+	g.drawPheromones()
 
 	g.drawAnts()
-	g.drawPheromones()
+	g.drawFood()
+
+	// game world bounding box
+	vector.StrokeRect(g.world, 0, 0, GAME_SIZE, GAME_SIZE, 5, color.White, true)
 }
 
 func (g *Game) drawAnts() {
@@ -67,20 +67,49 @@ func (g *Game) drawAnts() {
 	}
 }
 
+func (g *Game) drawFood() {
+	for _, f := range g.food.Points() {
+		food := f.(*Food)
+
+		c := Fade(BROWN, float32(food.amount/FOOD_START))
+
+		vector.FillCircle(g.world, float32(food.x), float32(food.y), 4, c, true)
+	}
+}
+
 func (g *Game) drawPheromones() {
-	for _, f := range g.foragingPheromone.Points() {
-		foraging := f.(Pheromone)
+	idx := 0 // byte index into g.px
 
-		c := Fade(DARK_GREEN, foraging.amount)
-		vector.StrokeCircle(g.world, float32(foraging.x), float32(foraging.y), 2, 2, c, true)
+	for r := range GAME_SIZE {
+		for c := range GAME_SIZE {
+
+			foraging := g.foragingPheromone[r][c]
+			returning := g.returningPheromone[r][c]
+
+			// Combine the two pheromones into one final color by blending values at position
+			fc := Fade(DARK_GREEN, foraging)
+			rc := Fade(DARK_LILAC, returning)
+
+			// fc and rc are color.Color → extract RGBA
+			fr, fg, fb, _ := fc.RGBA()
+			rr, rg, rb, _ := rc.RGBA()
+
+			// 16-bit → 8-bit convert: v>>8
+			r8 := byte((fr >> 8) + (rr >> 8))
+			g8 := byte((fg >> 8) + (rg >> 8))
+			b8 := byte((fb >> 8) + (rb >> 8))
+
+			// write RGBA to pixel buffer
+			g.px[idx+0] = r8
+			g.px[idx+1] = g8
+			g.px[idx+2] = b8
+			g.px[idx+3] = 255
+
+			idx += 4
+		}
 	}
 
-	for _, r := range g.returningPheromone.Points() {
-		returning := r.(Pheromone)
-
-		c := Fade(DARK_LILAC, returning.amount)
-		vector.StrokeCircle(g.world, float32(returning.x), float32(returning.y), 2, 2, c, true)
-	}
+	g.world.WritePixels(g.px)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {

@@ -1,19 +1,25 @@
 package main
 
 import (
+	"math"
+
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kyroy/kdtree"
 )
 
 const (
+	GAME_SIZE = 1000
+
 	ANT_SPEED = 3.0
 
-	PHEROMONE_DECAY = (1.0 / 60.0) / 10.0 // 60 FPS -> pheromone decays after 10 seconds
+	PHEROMONE_DECAY = (1.0 / 60.0) / 10.0 // denominator is number of seconds until decay
+
+	FOOD_START = 10
 )
 
 type Food struct {
 	// Position
-	Vector
+	*Vector
 
 	amount int
 }
@@ -33,13 +39,6 @@ type Ant struct {
 	state AntState
 }
 
-type Pheromone struct {
-	// Position
-	Vector
-
-	amount float32
-}
-
 type Game struct {
 	frameCount, updateCount uint64
 
@@ -47,37 +46,53 @@ type Game struct {
 	zoom       float64
 
 	world *ebiten.Image
+	px    []byte // RGBA buffer: width * height * 4
 
-	food               *kdtree.KDTree
-	ants               *kdtree.KDTree
-	hills              *kdtree.KDTree
-	foragingPheromone  *kdtree.KDTree
-	returningPheromone *kdtree.KDTree
+	food  *kdtree.KDTree
+	ants  *kdtree.KDTree
+	hills *kdtree.KDTree
+
+	foragingPheromone  [GAME_SIZE][GAME_SIZE]float32
+	returningPheromone [GAME_SIZE][GAME_SIZE]float32
 }
 
 func NewGame() *Game {
 	ants := kdtree.New(nil)
+	food := kdtree.New(nil)
 
-	for range 100 {
+	for range 1000 {
 		ants.Insert(Ant{
-			Vector: Vector{10, 10},
-			dir:    Vector{1, 1},
+			Vector: Vector{GAME_SIZE / 2, GAME_SIZE / 2},
+			dir:    Vector{Rand(-1, 1), Rand(-1, 1)},
 			state:  FORAGE,
 		})
+	}
+
+	for r := range 10 {
+		for c := range 10 {
+			food.Insert(&Food{
+				Vector: &Vector{x: 300.0 + float64(r), y: 300.0 + float64(c)},
+				amount: FOOD_START,
+			})
+		}
 	}
 
 	return &Game{
 		frameCount:  0,
 		updateCount: 0,
 
-		camX:  0,
-		camY:  0,
-		zoom:  1.0,
-		world: ebiten.NewImage(1000, 1000),
+		camX: 0,
+		camY: 0,
+		zoom: 1.0,
 
-		ants:               ants,
-		foragingPheromone:  kdtree.New(nil),
-		returningPheromone: kdtree.New(nil),
+		world: ebiten.NewImage(GAME_SIZE, GAME_SIZE),
+		px:    make([]byte, GAME_SIZE*GAME_SIZE*4), // pheromone buffer: 4 bytes per pixel (R,G,B,A)
+
+		ants: ants,
+		food: food,
+
+		foragingPheromone:  [GAME_SIZE][GAME_SIZE]float32{},
+		returningPheromone: [GAME_SIZE][GAME_SIZE]float32{},
 	}
 }
 
@@ -102,14 +117,44 @@ func (g *Game) updateAnts() {
 		// randomly rotate by up to 5 degrees
 		ant.dir = ant.dir.Rotate(Rand(-5, 5))
 
-		if g.updateCount%10 == 0 {
+		if ant.state == FORAGE {
+			// check for food nearby
+			nearFood := FindWithin(g.food, ant.Vector, 3)
+			for _, f := range nearFood {
+				food := f.(*Food)
+				if food.amount > 0 {
+					food.amount--
+				}
+
+				ant.state = RETURN
+			}
+		}
+
+		row := int(math.Round(ant.y))
+		col := int(math.Round(ant.x))
+
+		if row < 0 {
+			ant.dir.y = 1
+		}
+		if row >= GAME_SIZE {
+			ant.dir.y = -1
+		}
+		if col < 0 {
+			ant.dir.x = 1
+		}
+		if col >= GAME_SIZE {
+			ant.dir.x = -1
+		}
+
+		// check if ant inbounds -- can prob remove if we prevent them from going oob somehow
+		if row >= 0 && row < GAME_SIZE && col >= 0 && col < GAME_SIZE {
 			switch ant.state {
 			case FORAGE:
 				// do we need to do this in "nextForagingPheromone" or something?
 				// currently, ants would smell this pheromone the same frame that it's placed, fine?
-				g.foragingPheromone.Insert(Pheromone{Vector: ant.Vector, amount: 1.0})
+				g.foragingPheromone[row][col] = 1.0
 			case RETURN:
-				g.returningPheromone.Insert(Pheromone{Vector: ant.Vector, amount: 1.0})
+				g.returningPheromone[row][col] = 1.0
 			}
 		}
 
@@ -121,31 +166,14 @@ func (g *Game) updateAnts() {
 }
 
 func (g *Game) updatePheromones() {
-	nextForagingPheromone := kdtree.New(nil)
-	nextReturningPheromone := kdtree.New(nil)
-
-	for _, f := range g.foragingPheromone.Points() {
-		foraging := f.(Pheromone)
-
-		nextAmount := foraging.amount - PHEROMONE_DECAY
-		if nextAmount > 0 {
-			nextForagingPheromone.Insert(Pheromone{Vector: foraging.Vector, amount: nextAmount})
+	for r := range GAME_SIZE {
+		for c := range GAME_SIZE {
+			foraging := g.foragingPheromone[r][c]
+			returning := g.returningPheromone[r][c]
+			g.foragingPheromone[r][c] = max(foraging-PHEROMONE_DECAY, 0.0)
+			g.returningPheromone[r][c] = max(returning-PHEROMONE_DECAY, 0.0)
 		}
 	}
-
-	for _, r := range g.returningPheromone.Points() {
-		returning := r.(Pheromone)
-
-		nextAmount := returning.amount - PHEROMONE_DECAY
-		if nextAmount > 0 {
-			nextReturningPheromone.Insert(Pheromone{Vector: returning.Vector, amount: nextAmount})
-		}
-	}
-
-	nextForagingPheromone.Balance()
-	nextReturningPheromone.Balance()
-	g.foragingPheromone = nextForagingPheromone
-	g.returningPheromone = nextReturningPheromone
 }
 
 func (g *Game) pollInput() {
