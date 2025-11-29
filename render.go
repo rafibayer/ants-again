@@ -59,8 +59,8 @@ func (g *Game) drawAnts() {
 		ant := a.(Ant)
 
 		// debug circle -- food search area
-		// front := ant.Vector.Add(ant.dir.Normalize().Mul(2.0))
-		// vector.StrokeCircle(g.world, float32(front.x), float32(front.y), 1.75, 1.0, color.White, true)
+		// sensor := ant.Vector.Add(ant.dir.Normalize().Mul(ANT_SENSOR_DIST))
+		// vector.StrokeCircle(g.world, float32(sensor.x), float32(sensor.y), ANT_SENSOR_RADIUS, 1.0, color.White, true)
 
 		// 1 away from ant facing
 		tail := ant.Add(ant.dir.Normalize().Mul(-5))

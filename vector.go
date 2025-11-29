@@ -53,6 +53,11 @@ func (p Vector) Mul(v float64) Vector {
 	return Vector{x: p.x * v, y: p.y * v}
 }
 
+func (p Vector) CosineSimilarity(other Vector) float64 {
+	dot := p.x*other.x + p.y*other.y
+	return dot / (p.Magnitude() * other.Magnitude())
+}
+
 func (v Vector) Rotate(deg float64) Vector {
 	rad := deg * math.Pi / 180
 	cos := math.Cos(rad)

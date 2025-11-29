@@ -1,17 +1,21 @@
 package main
 
 import (
+	"log"
+
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kyroy/kdtree"
 )
 
 const (
-	GAME_SIZE = 500
+	GAME_SIZE = 1000
 
-	ANT_SPEED = 0.5
+	ANT_SPEED         = 0.5
+	ANT_SENSOR_DIST   = 7.0
+	ANT_SENSOR_RADIUS = 5.0
 
 	PHEROMONE_DECAY              = (1.0 / 60.0) / 10.0 // denominator is number of seconds until decay
-	PHEROMONE_INFLUENCE_DISCOUNT = 0.01                // reduce effect of pheromone on ant direction
+	PHEROMONE_INFLUENCE_DISCOUNT = 0.1                 // reduce effect of pheromone on ant direction
 	PHEROMONE_PENDING_TICKS      = 45                  // how long before a pheromone becomes active
 
 	FOOD_START = 10
@@ -61,7 +65,7 @@ func NewGame() *Game {
 	food := kdtree.New(nil)
 	hills := kdtree.New(nil)
 
-	for range 300 {
+	for range 1000 {
 		ants.Insert(Ant{
 			Vector: Vector{GAME_SIZE / 2, GAME_SIZE / 2},
 			dir:    Vector{Rand(-1, 1), Rand(-1, 1)},
@@ -73,6 +77,11 @@ func NewGame() *Game {
 		for c := range 20 {
 			food.Insert(&Food{
 				Vector: &Vector{x: GAME_SIZE/3 + float64(r), y: GAME_SIZE/3 + float64(c)},
+				amount: FOOD_START,
+			})
+
+			food.Insert(&Food{
+				Vector: &Vector{x: GAME_SIZE*(2.0/3.0) + float64(r), y: GAME_SIZE/2 + float64(c)},
 				amount: FOOD_START,
 			})
 		}
@@ -125,7 +134,7 @@ func (g *Game) updateAnts() {
 		row, col := ant.ToGrid()
 		keepInbounds(&ant, row, col)
 
-		front := ant.Vector.Add(ant.dir.Normalize().Mul(3.0))
+		sensor := ant.Vector.Add(ant.dir.Normalize().Mul(ANT_SENSOR_DIST))
 
 		// pheromone field to search based on ant state
 		pheromone := &g.returningPheromone
@@ -135,13 +144,15 @@ func (g *Game) updateAnts() {
 
 		// influence direction based on pheromone
 		pheromoneDir := ZERO
-		VisitCircle(pheromone, front.y, front.x, 1.5, func(value float32, weight float64, r, c int) {
+		VisitCircle(pheromone, sensor.y, sensor.x, ANT_SENSOR_RADIUS, func(value float32, weight float64, r, c int) {
 			// direction to pheromone and signal strength
 			spot := Vector{x: float64(c), y: float64(r)}
 			dirToSpot := spot.Sub(ant.Vector).Normalize()
 
-			// discount by weight and distance from ant
-			strength := (float64(value) * weight) / (1 + ant.Vector.Distance(spot))
+			// scale by weight, distance to ant, and angular similarity
+			strength := float64(value) * weight
+			strength = strength / max(0.1, ant.Vector.Distance(spot)) // prevent overweighting really close smells
+			strength *= ant.dir.CosineSimilarity(dirToSpot)
 			pheromoneDir = pheromoneDir.Add(dirToSpot.Mul(strength))
 		})
 
@@ -149,10 +160,11 @@ func (g *Game) updateAnts() {
 
 		if ant.state == FORAGE {
 			// check for food in front, change state and turn around
-			nearFood := KDSearchRadius(g.food, front, 3)
+			nearFood := KDSearchRadius(g.food, sensor, 3)
 			for _, f := range nearFood {
 				food := f.(*Food)
 				if food.amount > 0 {
+					log.Print("found food")
 					food.amount--
 					ant.state = RETURN
 					ant.dir = ant.dir.Mul(-1.0)
@@ -165,6 +177,7 @@ func (g *Game) updateAnts() {
 			// check for hill nearby, change state and turn around
 			nearHill := KDSearchRadius(g.hills, ant.Vector, 15.0)
 			if len(nearHill) > 0 {
+				log.Print("found hill")
 				// turn around and go back to foraging
 				ant.state = FORAGE
 				ant.dir = ant.dir.Mul(-1.0)
