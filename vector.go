@@ -8,10 +8,7 @@ import (
 )
 
 var (
-	UP    = Vector{x: 0.0, y: 1.0}
-	DOWN  = UP.Mul(-1)
-	RIGHT = Vector{x: 1.0, y: 0.0}
-	LEFT  = RIGHT.Mul(-1)
+	ZERO = Vector{0, 0}
 )
 
 type Vector struct {
@@ -67,7 +64,14 @@ func (v Vector) Rotate(deg float64) Vector {
 	}
 }
 
-func FindWithin(tree *kdtree.KDTree, center Vector, radius float64) []kdtree.Point {
+func (v Vector) ToGrid() (row, col int) {
+	row = int(math.Round(v.y))
+	col = int(math.Round(v.x))
+
+	return row, col
+}
+
+func KDSearchRadius(tree *kdtree.KDTree, center Vector, radius float64) []kdtree.Point {
 	// 2d KD tree allows for range search in a rectangle.
 	// we find points in the rectangle, then filter down to those within a circle bound by the rectangle
 	xMin := center.x - radius
@@ -86,4 +90,69 @@ func FindWithin(tree *kdtree.KDTree, center Vector, radius float64) []kdtree.Poi
 	}
 
 	return result
+}
+
+func VisitCircle(
+	grid *[GAME_SIZE][GAME_SIZE]float32,
+	rowF, colF, radius float64,
+	callback func(value float32, weight float64, r, c int),
+) {
+	if radius <= 0 {
+		return
+	}
+
+	rows := len(grid)
+	if rows == 0 {
+		return
+	}
+	cols := len(grid[0])
+
+	// Search bounding box around the float center
+	minR := int(math.Floor(rowF - radius))
+	maxR := int(math.Ceil(rowF + radius))
+	minC := int(math.Floor(colF - radius))
+	maxC := int(math.Ceil(colF + radius))
+
+	// Clamp to grid
+	if minR < 0 {
+		minR = 0
+	}
+	if minC < 0 {
+		minC = 0
+	}
+	if maxR > rows-1 {
+		maxR = rows - 1
+	}
+	if maxC > cols-1 {
+		maxC = cols - 1
+	}
+
+	r2 := radius * radius
+
+	for r := minR; r <= maxR; r++ {
+		for c := minC; c <= maxC; c++ {
+
+			// Distance from cell center to circle center
+			dr := (float64(r) + 0.5) - rowF
+			dc := (float64(c) + 0.5) - colF
+			dist2 := dr*dr + dc*dc
+
+			if dist2 <= r2 {
+				// Fully inside → weight 1
+				callback(grid[r][c], 1.0, r, c)
+			} else {
+				// Optional: compute soft boundary weight
+				// Example: linear falloff in a margin of thickness 1 cell
+				dist := math.Sqrt(dist2)
+				if dist-radius < 1.0 && dist < radius+1.0 {
+					// linear blend for partial overlap
+					weight := 1.0 - (dist - radius)
+					if weight < 0 {
+						weight = 0
+					}
+					callback(grid[r][c], weight, r, c)
+				}
+			}
+		}
+	}
 }

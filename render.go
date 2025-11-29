@@ -20,19 +20,21 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	g.world.Clear()
 
 	drawScreenSpace(g, screen)
+	drawWorldSpace(g)
 
+	screen.DrawImage(g.world, g.getCameraOpts())
+
+	g.frameCount++
+}
+
+func (g *Game) getCameraOpts() *ebiten.DrawImageOptions {
 	// translate op for drawing world in screen space with pan and zoom
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(-g.camX, -g.camY)       // Pan (world space)
 	op.GeoM.Translate(-screenW/2, -screenH/2) //  Move pivot to center of screen
 	op.GeoM.Scale(g.zoom, g.zoom)             // Zoom
 	op.GeoM.Translate(screenW/2, screenH/2)   //  Move pivot back
-
-	drawWorldSpace(g)
-
-	screen.DrawImage(g.world, op)
-
-	g.frameCount++
+	return op
 }
 
 func drawScreenSpace(_ *Game, screen *ebiten.Image) {
@@ -46,6 +48,7 @@ func drawWorldSpace(g *Game) {
 
 	g.drawAnts()
 	g.drawFood()
+	g.drawHills()
 
 	// game world bounding box
 	vector.StrokeRect(g.world, 0, 0, GAME_SIZE, GAME_SIZE, 5, color.White, true)
@@ -54,6 +57,10 @@ func drawWorldSpace(g *Game) {
 func (g *Game) drawAnts() {
 	for _, a := range g.ants.Points() {
 		ant := a.(Ant)
+
+		// debug circle -- food search area
+		// front := ant.Vector.Add(ant.dir.Normalize().Mul(2.0))
+		// vector.StrokeCircle(g.world, float32(front.x), float32(front.y), 1.75, 1.0, color.White, true)
 
 		// 1 away from ant facing
 		tail := ant.Add(ant.dir.Normalize().Mul(-5))
@@ -72,8 +79,15 @@ func (g *Game) drawFood() {
 		food := f.(*Food)
 
 		c := Fade(BROWN, float32(food.amount/FOOD_START))
+		vector.FillCircle(g.world, float32(food.x), float32(food.y), 1.5, c, true)
+	}
+}
 
-		vector.FillCircle(g.world, float32(food.x), float32(food.y), 4, c, true)
+func (g *Game) drawHills() {
+	for _, h := range g.hills.Points() {
+		hill := h.(Vector)
+
+		vector.FillCircle(g.world, float32(hill.x), float32(hill.y), 15.0, WHITE, true)
 	}
 }
 

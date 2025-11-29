@@ -13,7 +13,7 @@ func TestFindWithin(t *testing.T) {
 		Vector{x: 1, y: 1},
 	})
 
-	found := FindWithin(tree, Vector{0, 0}, 1.0)
+	found := KDSearchRadius(tree, Vector{0, 0}, 1.0)
 	if len(found) != 2 {
 		t.FailNow()
 	}
