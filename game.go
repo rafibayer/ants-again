@@ -14,12 +14,12 @@ const (
 	ANT_FOOD_RADIUS = 5.0  // radius in which an ant will pick up food
 	ANT_HILL_RADIUS = 15.0 // raidus in which an ant will return to hill
 
-	PHEROMONE_SENSE_RADIUS = 75.0                // radius in which an ant will smell pheromones
+	PHEROMONE_SENSE_RADIUS = 100.0               // radius in which an ant will smell pheromones
 	PHEROMONE_DECAY        = (1.0 / 60.0) / 15.0 // denominator is number of seconds until decay
 	PHEROMONE_DROP_PROB    = 1.0 / 120.0         // odds of dropping a pheromone per tick
 
 	// we can tune perf with these, less sensing, but with more effect to reduce kdtree searches
-	PHEROMONE_INFLUENCE  = 5.00      // increase or decrease effect of pheromone on direction
+	PHEROMONE_INFLUENCE  = 2.00      // increase or decrease effect of pheromone on direction
 	PHEROMONE_SENSE_PROB = 1.0 / 5.0 // odds of smelling for pheromones per tick
 
 	FOOD_START = 50
@@ -74,6 +74,7 @@ type Game struct {
 	cachedAntsCount              int
 	cachedForagingPheromoneCount int
 	cachedReturningPheromone     int
+	cachedFood                   int
 }
 
 func NewGame() *Game {
@@ -171,7 +172,7 @@ func (g *Game) updateAnts() {
 				// scale by weight, distance to ant, and angular similarity
 				strength := float64(pher.amount)
 				strength = strength / max(0.1, ant.Vector.Distance(*pher.Vector)) // prevent overweighting really close smells
-				strength *= max(ant.dir.CosineSimilarity(dirToSpot), -0.1)        // todo: const. This number represents min weight of signals with lower cosine similarity
+				strength *= LinearRemap(ant.dir.CosineSimilarity(dirToSpot))      // discount dissimilar angles
 				pheromoneDir = pheromoneDir.Add(dirToSpot.Mul(strength))
 			}
 
@@ -261,17 +262,16 @@ func (g *Game) updatePheromones() {
 }
 
 func (g *Game) updateFood() {
-	nextFood := kdtree.New(nil)
+	g.cachedFood = 0
+
 	for f := range g.food.Chan() {
 		food := f.(*Food)
+		g.cachedFood += food.amount
 
-		if food.amount > 0 {
-			nextFood.Insert(food)
+		if food.amount <= 0 {
+			g.food.Remove(food)
 		}
 	}
-
-	nextFood.Balance()
-	g.food = nextFood
 }
 
 func (g *Game) pollInput() {

@@ -44,6 +44,7 @@ func drawScreenSpace(g *Game, screen *ebiten.Image) {
 		tps string
 
 		ants      int
+		food      int
 		pheromone struct {
 			forage   int
 			returing int
@@ -52,6 +53,7 @@ func drawScreenSpace(g *Game, screen *ebiten.Image) {
 		fps:  fmt.Sprintf("%.0f", ebiten.ActualFPS()),
 		tps:  fmt.Sprintf("%.0f", ebiten.ActualTPS()),
 		ants: g.cachedAntsCount,
+		food: g.cachedFood,
 		pheromone: struct {
 			forage   int
 			returing int
@@ -92,7 +94,7 @@ func (g *Game) drawAnts() {
 			c = LILAC
 		}
 
-		vector.StrokeLine(g.world, float32(ant.x), float32(ant.y), float32(tail.x), float32(tail.y), 2, c, true)
+		vector.StrokeLine(g.world, float32(ant.x), float32(ant.y), float32(tail.x), float32(tail.y), 2, c, false)
 	}
 }
 
@@ -101,7 +103,7 @@ func (g *Game) drawFood() {
 		food := f.(*Food)
 
 		c := Fade(BROWN, float32(food.amount/FOOD_START))
-		vector.FillRect(g.world, float32(food.x), float32(food.y), 1.5, 1.5, c, true)
+		vector.FillRect(g.world, float32(food.x), float32(food.y), 1.5, 1.5, c, false)
 	}
 }
 

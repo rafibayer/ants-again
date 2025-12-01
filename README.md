@@ -24,3 +24,4 @@ perf opportunities
 - less frequent sensing, more influence
 
 apparently drawing food as circles was incredibly expensive... how did I miss this with pprof?
+anti-aliasing was also very expensive, not needed
