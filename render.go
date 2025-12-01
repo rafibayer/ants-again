@@ -38,8 +38,29 @@ func (g *Game) getCameraOpts() *ebiten.DrawImageOptions {
 	return op
 }
 
-func drawScreenSpace(_ *Game, screen *ebiten.Image) {
-	ebitenutil.DebugPrint(screen, fmt.Sprintf("FPS: %.0f\nTPS: %.0f", ebiten.ActualFPS(), ebiten.ActualTPS()))
+func drawScreenSpace(g *Game, screen *ebiten.Image) {
+	stats := struct {
+		fps string
+		tps string
+
+		ants      int
+		pheromone struct {
+			forage   int
+			returing int
+		}
+	}{
+		fps:  fmt.Sprintf("%.0f", ebiten.ActualFPS()),
+		tps:  fmt.Sprintf("%.0f", ebiten.ActualTPS()),
+		ants: g.cachedAntsCount,
+		pheromone: struct {
+			forage   int
+			returing int
+		}{
+			forage:   g.cachedForagingPheromoneCount,
+			returing: g.cachedReturningPheromone,
+		},
+	}
+	ebitenutil.DebugPrint(screen, fmt.Sprintf("%+v", stats))
 }
 
 // drawCalls should be ordered from back to front.
@@ -57,10 +78,10 @@ func drawWorldSpace(g *Game) {
 
 func (g *Game) drawAnts() {
 	for a := range g.ants.Chan() {
-		ant := a.(Ant)
+		ant := a.(*Ant)
 
 		// debug circle -- food search area
-		// sensor := ant.Vector.Add(ant.dir.Normalize().Mul(ANT_SENSOR_DIST))
+		// sensor := ant.Vector
 		// vector.StrokeCircle(g.world, float32(sensor.x), float32(sensor.y), ANT_SENSOR_RADIUS, 1.0, color.White, true)
 
 		// 1 away from ant facing
@@ -80,7 +101,7 @@ func (g *Game) drawFood() {
 		food := f.(*Food)
 
 		c := Fade(BROWN, float32(food.amount/FOOD_START))
-		vector.FillCircle(g.world, float32(food.x), float32(food.y), 1.5, c, true)
+		vector.FillRect(g.world, float32(food.x), float32(food.y), 1.5, 1.5, c, true)
 	}
 }
 
