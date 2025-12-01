@@ -2,21 +2,21 @@ package main
 
 import (
 	"log"
+	"math/rand/v2"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/kyroy/kdtree"
+	"github.com/rafibayer/ants-again/kdtree"
 )
 
 const (
 	GAME_SIZE = 1000
 
-	ANT_SPEED         = 0.5
-	ANT_SENSOR_DIST   = 7.0
-	ANT_SENSOR_RADIUS = 5.0
+	ANT_SPEED         = 2.5
+	ANT_SENSOR_RADIUS = 30.0
 
-	PHEROMONE_DECAY              = (1.0 / 60.0) / 10.0 // denominator is number of seconds until decay
-	PHEROMONE_INFLUENCE_DISCOUNT = 0.1                 // reduce effect of pheromone on ant direction
-	PHEROMONE_PENDING_TICKS      = 45                  // how long before a pheromone becomes active
+	PHEROMONE_DECAY              = (1.0 / 60.0) / 30.0 // denominator is number of seconds until decay
+	PHEROMONE_INFLUENCE_DISCOUNT = 1.00                // reduce effect of pheromone on ant direction
+	PHEROMONE_DROP_PROB          = 1.0 / 60.0          // odds of dropping a pheromone per tick
 
 	FOOD_START = 10
 )
@@ -43,6 +43,13 @@ type Ant struct {
 	state AntState
 }
 
+type Pheromone struct {
+	// position
+	*Vector
+
+	amount float32
+}
+
 type Game struct {
 	frameCount, tickCount int
 
@@ -56,8 +63,8 @@ type Game struct {
 	ants  *kdtree.KDTree
 	hills *kdtree.KDTree
 
-	foragingPheromone  [GAME_SIZE][GAME_SIZE]float32
-	returningPheromone [GAME_SIZE][GAME_SIZE]float32
+	foragingPheromone  *kdtree.KDTree
+	returningPheromone *kdtree.KDTree
 }
 
 func NewGame() *Game {
@@ -104,8 +111,8 @@ func NewGame() *Game {
 		food:  food,
 		hills: hills,
 
-		foragingPheromone:  [GAME_SIZE][GAME_SIZE]float32{},
-		returningPheromone: [GAME_SIZE][GAME_SIZE]float32{},
+		foragingPheromone:  kdtree.New(nil),
+		returningPheromone: kdtree.New(nil),
 	}
 }
 
@@ -124,7 +131,7 @@ func (g *Game) updateAnts() {
 	nextAnts := kdtree.New(nil)
 
 	// update each ant, add to next and state
-	for _, a := range g.ants.Points() {
+	for a := range g.ants.Chan() {
 		ant := a.(Ant)
 		ant.Vector = ant.Add(ant.dir.Normalize().Mul(ANT_SPEED))
 
@@ -134,33 +141,36 @@ func (g *Game) updateAnts() {
 		row, col := ant.ToGrid()
 		keepInbounds(&ant, row, col)
 
-		sensor := ant.Vector.Add(ant.dir.Normalize().Mul(ANT_SENSOR_DIST))
-
 		// pheromone field to search based on ant state
-		pheromone := &g.returningPheromone
+		pheromone := g.returningPheromone
 		if ant.state == RETURN {
-			pheromone = &g.foragingPheromone
+			pheromone = g.foragingPheromone
 		}
 
 		// influence direction based on pheromone
 		pheromoneDir := ZERO
-		VisitCircle(pheromone, sensor.y, sensor.x, ANT_SENSOR_RADIUS, func(value float32, weight float64, r, c int) {
+		nearby := KDSearchRadius(pheromone, ant.Vector, ANT_SENSOR_RADIUS)
+
+		for _, p := range nearby {
+			pher := p.(*Pheromone)
+			r, c := pher.ToGrid()
+
 			// direction to pheromone and signal strength
 			spot := Vector{x: float64(c), y: float64(r)}
 			dirToSpot := spot.Sub(ant.Vector).Normalize()
 
 			// scale by weight, distance to ant, and angular similarity
-			strength := float64(value) * weight
+			strength := float64(pher.amount)
 			strength = strength / max(0.1, ant.Vector.Distance(spot)) // prevent overweighting really close smells
 			strength *= ant.dir.CosineSimilarity(dirToSpot)
 			pheromoneDir = pheromoneDir.Add(dirToSpot.Mul(strength))
-		})
+		}
 
 		ant.dir = ant.dir.Add(pheromoneDir.Mul(PHEROMONE_INFLUENCE_DISCOUNT)).Normalize()
 
 		if ant.state == FORAGE {
-			// check for food in front, change state and turn around
-			nearFood := KDSearchRadius(g.food, sensor, 3)
+			// check for food nearby, change state and turn around
+			nearFood := KDSearchRadius(g.food, ant.Vector, 3)
 			for _, f := range nearFood {
 				food := f.(*Food)
 				if food.amount > 0 {
@@ -184,14 +194,14 @@ func (g *Game) updateAnts() {
 			}
 		}
 
-		// check if ant inbounds -- can prob remove if we prevent them from going oob somehow
-		if row >= 0 && row < GAME_SIZE && col >= 0 && col < GAME_SIZE {
-			// append to queue, becomes active after delay
+		dropPheromone := rand.Float32() < PHEROMONE_DROP_PROB
+		// only drop pheromone if inbounds
+		if dropPheromone && (row >= 0 && row < GAME_SIZE && col >= 0 && col < GAME_SIZE) {
 			switch ant.state {
 			case FORAGE:
-				g.foragingPheromone[row][col] = 1.0
+				g.foragingPheromone.Insert(&Pheromone{Vector: &Vector{x: ant.x, y: ant.y}, amount: 1.0})
 			case RETURN:
-				g.returningPheromone[row][col] = 1.0
+				g.returningPheromone.Insert(&Pheromone{Vector: &Vector{x: ant.x, y: ant.y}, amount: 1.0})
 			}
 		}
 
@@ -218,20 +228,33 @@ func keepInbounds(ant *Ant, row int, col int) {
 }
 
 func (g *Game) updatePheromones() {
-	// decay pheromones
-	for r := range GAME_SIZE {
-		for c := range GAME_SIZE {
-			foraging := g.foragingPheromone[r][c]
-			returning := g.returningPheromone[r][c]
-			g.foragingPheromone[r][c] = max(foraging-PHEROMONE_DECAY, 0.0)
-			g.returningPheromone[r][c] = max(returning-PHEROMONE_DECAY, 0.0)
+	for p := range g.foragingPheromone.Chan() {
+		pher := p.(*Pheromone)
+
+		pher.amount -= PHEROMONE_DECAY
+		if pher.amount <= 0 {
+			g.foragingPheromone.Remove(p)
 		}
+	}
+
+	for p := range g.returningPheromone.Chan() {
+		pher := p.(*Pheromone)
+
+		pher.amount -= PHEROMONE_DECAY
+		if pher.amount <= 0 {
+			g.returningPheromone.Remove(p)
+		}
+	}
+
+	if g.tickCount%30 == 0 {
+		g.foragingPheromone.Balance()
+		g.returningPheromone.Balance()
 	}
 }
 
 func (g *Game) updateFood() {
 	nextFood := kdtree.New(nil)
-	for _, f := range g.food.Points() {
+	for f := range g.food.Chan() {
 		food := f.(*Food)
 
 		if food.amount > 0 {

@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/kyroy/kdtree"
+	"github.com/rafibayer/ants-again/kdtree"
 )
 
 func TestFindWithin(t *testing.T) {

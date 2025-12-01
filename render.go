@@ -5,6 +5,7 @@ import (
 	"image/color"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/rafibayer/ants-again/kdtree"
 
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/vector"
@@ -55,7 +56,7 @@ func drawWorldSpace(g *Game) {
 }
 
 func (g *Game) drawAnts() {
-	for _, a := range g.ants.Points() {
+	for a := range g.ants.Chan() {
 		ant := a.(Ant)
 
 		// debug circle -- food search area
@@ -75,7 +76,7 @@ func (g *Game) drawAnts() {
 }
 
 func (g *Game) drawFood() {
-	for _, f := range g.food.Points() {
+	for f := range g.food.Chan() {
 		food := f.(*Food)
 
 		c := Fade(BROWN, float32(food.amount/FOOD_START))
@@ -84,7 +85,7 @@ func (g *Game) drawFood() {
 }
 
 func (g *Game) drawHills() {
-	for _, h := range g.hills.Points() {
+	for h := range g.hills.Chan() {
 		hill := h.(Vector)
 
 		vector.FillCircle(g.world, float32(hill.x), float32(hill.y), 15.0, WHITE, true)
@@ -92,37 +93,36 @@ func (g *Game) drawHills() {
 }
 
 func (g *Game) drawPheromones() {
-	idx := 0 // byte index into g.px
+	// Clear buffer to black (or background color)
+	for i := range g.px {
+		g.px[i] = 0
+	}
 
-	for r := range GAME_SIZE {
-		for c := range GAME_SIZE {
+	writePheromones := func(ph *kdtree.KDTree, color color.RGBA) {
+		for p := range ph.Chan() {
+			pher := p.(*Pheromone)
 
-			foraging := g.foragingPheromone[r][c]
-			returning := g.returningPheromone[r][c]
+			// Fade color by pheromone amount (0..1)
+			c := Fade(color, pher.amount)
 
-			// Combine the two pheromones into one final color by blending values at position
-			fc := Fade(DARK_GREEN, foraging)
-			rc := Fade(DARK_LILAC, returning)
+			x := int(pher.x)
+			y := int(pher.y)
+			if x < 0 || x >= GAME_SIZE || y < 0 || y >= GAME_SIZE {
+				continue
+			}
 
-			// fc and rc are color.Color → extract RGBA
-			fr, fg, fb, _ := fc.RGBA()
-			rr, rg, rb, _ := rc.RGBA()
-
-			// 16-bit → 8-bit convert: v>>8
-			r8 := byte((fr >> 8) + (rr >> 8))
-			g8 := byte((fg >> 8) + (rg >> 8))
-			b8 := byte((fb >> 8) + (rb >> 8))
-
-			// write RGBA to pixel buffer
-			g.px[idx+0] = r8
-			g.px[idx+1] = g8
-			g.px[idx+2] = b8
+			idx := 4 * (y*GAME_SIZE + x)
+			g.px[idx+0] = c.R
+			g.px[idx+1] = c.G
+			g.px[idx+2] = c.B
 			g.px[idx+3] = 255
-
-			idx += 4
 		}
 	}
 
+	writePheromones(g.foragingPheromone, DARK_GREEN)
+	writePheromones(g.returningPheromone, DARK_LILAC)
+
+	// Write the pixel buffer to the ebiten.Image once
 	g.world.WritePixels(g.px)
 }
 

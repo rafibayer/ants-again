@@ -3,8 +3,8 @@ package main
 import (
 	"math"
 
-	"github.com/kyroy/kdtree"
 	"github.com/kyroy/kdtree/kdrange"
+	"github.com/rafibayer/ants-again/kdtree"
 )
 
 var (
