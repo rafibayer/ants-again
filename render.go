@@ -75,7 +75,7 @@ func drawWorldSpace(g *Game) {
 	g.drawHills()
 
 	// game world bounding box
-	vector.StrokeRect(g.world, 0, 0, GAME_SIZE, GAME_SIZE, 5, color.White, true)
+	vector.StrokeRect(g.world, 0, 0, GAME_SIZE, GAME_SIZE, 5, color.White, false)
 }
 
 func (g *Game) drawAnts() {
@@ -84,7 +84,7 @@ func (g *Game) drawAnts() {
 
 		// debug circle -- food search area
 		// sensor := ant.Vector
-		// vector.StrokeCircle(g.world, float32(sensor.x), float32(sensor.y), ANT_SENSOR_RADIUS, 1.0, color.White, true)
+		// vector.StrokeCircle(g.world, float32(sensor.x), float32(sensor.y), PHEROMONE_SENSE_RADIUS, 1.0, color.White, false)
 
 		// 1 away from ant facing
 		tail := ant.Add(ant.dir.Normalize().Mul(-5))
@@ -111,7 +111,7 @@ func (g *Game) drawHills() {
 	for h := range g.hills.Chan() {
 		hill := h.(Vector)
 
-		vector.FillCircle(g.world, float32(hill.x), float32(hill.y), 15.0, WHITE, true)
+		vector.FillCircle(g.world, float32(hill.x), float32(hill.y), ANT_HILL_RADIUS, WHITE, false)
 	}
 }
 

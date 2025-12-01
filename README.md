@@ -24,4 +24,9 @@ perf opportunities
 - less frequent sensing, more influence
 
 apparently drawing food as circles was incredibly expensive... how did I miss this with pprof?
+
 anti-aliasing was also very expensive, not needed
+- oh... like very very expensive...
+
+next steps
+- should we keep turning around on state change? or allow sensing of pheromone behind

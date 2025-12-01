@@ -12,9 +12,9 @@ const (
 
 	ANT_SPEED       = 2.5
 	ANT_FOOD_RADIUS = 5.0  // radius in which an ant will pick up food
-	ANT_HILL_RADIUS = 15.0 // raidus in which an ant will return to hill
+	ANT_HILL_RADIUS = 20.0 // raidus in which an ant will return to hill
 
-	PHEROMONE_SENSE_RADIUS = 100.0               // radius in which an ant will smell pheromones
+	PHEROMONE_SENSE_RADIUS = GAME_SIZE / 5.0     // radius in which an ant will smell pheromones
 	PHEROMONE_DECAY        = (1.0 / 60.0) / 15.0 // denominator is number of seconds until decay
 	PHEROMONE_DROP_PROB    = 1.0 / 120.0         // odds of dropping a pheromone per tick
 
@@ -147,7 +147,7 @@ func (g *Game) updateAnts() {
 		ant.Vector = ant.Add(ant.dir.Normalize().Mul(ANT_SPEED))
 
 		// randomly rotate a few degrees
-		ant.dir = ant.dir.Rotate(Rand(-2.5, 2.5))
+		ant.dir = ant.dir.Rotate(Rand(-5, 5))
 
 		row, col := ant.ToGrid()
 		keepInbounds(ant, row, col)
