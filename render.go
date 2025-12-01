@@ -52,7 +52,7 @@ func drawScreenSpace(g *Game, screen *ebiten.Image) {
 	}{
 		fps:  fmt.Sprintf("%.0f", ebiten.ActualFPS()),
 		tps:  fmt.Sprintf("%.0f", ebiten.ActualTPS()),
-		ants: g.cachedAntsCount,
+		ants: len(g.ants),
 		food: g.cachedFood,
 		pheromone: struct {
 			forage   int
@@ -79,12 +79,10 @@ func drawWorldSpace(g *Game) {
 }
 
 func (g *Game) drawAnts() {
-	for a := range g.ants.Chan() {
-		ant := a.(*Ant)
+	for _, ant := range g.ants {
 
 		// debug circle -- food search area
-		// sensor := ant.Vector
-		// vector.StrokeCircle(g.world, float32(sensor.x), float32(sensor.y), PHEROMONE_SENSE_RADIUS, 1.0, color.White, false)
+		// vector.StrokeCircle(g.world, float32(ant.x), float32(ant.y), PHEROMONE_SENSE_RADIUS, 1.0, color.White, false)
 
 		// 1 away from ant facing
 		tail := ant.Add(ant.dir.Normalize().Mul(-5))

@@ -14,7 +14,7 @@ const (
 	ANT_FOOD_RADIUS = 5.0  // radius in which an ant will pick up food
 	ANT_HILL_RADIUS = 20.0 // raidus in which an ant will return to hill
 
-	PHEROMONE_SENSE_RADIUS = GAME_SIZE / 5.0     // radius in which an ant will smell pheromones
+	PHEROMONE_SENSE_RADIUS = GAME_SIZE / 6.0     // radius in which an ant will smell pheromones
 	PHEROMONE_DECAY        = (1.0 / 60.0) / 15.0 // denominator is number of seconds until decay
 	PHEROMONE_DROP_PROB    = 1.0 / 120.0         // odds of dropping a pheromone per tick
 
@@ -63,27 +63,26 @@ type Game struct {
 	world *ebiten.Image
 	px    []byte // RGBA buffer: width * height * 4
 
+	ants  []*Ant
 	food  *kdtree.KDTree
-	ants  *kdtree.KDTree
 	hills *kdtree.KDTree
 
 	foragingPheromone  *kdtree.KDTree
 	returningPheromone *kdtree.KDTree
 
 	// cached tree sizes for stat reporting
-	cachedAntsCount              int
 	cachedForagingPheromoneCount int
 	cachedReturningPheromone     int
 	cachedFood                   int
 }
 
 func NewGame() *Game {
-	ants := kdtree.New(nil)
+	ants := []*Ant{}
 	food := kdtree.New(nil)
 	hills := kdtree.New(nil)
 
 	for range 500 {
-		ants.Insert(&Ant{
+		ants = append(ants, &Ant{
 			Vector: Vector{GAME_SIZE / 2, GAME_SIZE / 2},
 			dir:    Vector{Rand(-1, 1), Rand(-1, 1)},
 			state:  FORAGE,
@@ -138,12 +137,9 @@ func (g *Game) Update() error {
 }
 
 func (g *Game) updateAnts() {
-	g.cachedAntsCount = 0
 
 	// update each ant, add to next and state
-	for a := range g.ants.Chan() {
-		g.cachedAntsCount++
-		ant := a.(*Ant)
+	for _, ant := range g.ants {
 		ant.Vector = ant.Add(ant.dir.Normalize().Mul(ANT_SPEED))
 
 		// randomly rotate a few degrees
@@ -173,10 +169,12 @@ func (g *Game) updateAnts() {
 				strength := float64(pher.amount)
 				strength = strength / max(0.1, ant.Vector.Distance(*pher.Vector)) // prevent overweighting really close smells
 				strength *= LinearRemap(ant.dir.CosineSimilarity(dirToSpot))      // discount dissimilar angles
+
 				pheromoneDir = pheromoneDir.Add(dirToSpot.Mul(strength))
 			}
 
-			ant.dir = ant.dir.Add(pheromoneDir.Mul(PHEROMONE_INFLUENCE)).Normalize()
+			ant.dir = ant.dir.Add(pheromoneDir.Mul(PHEROMONE_INFLUENCE))
+			ant.dir = ant.dir.Normalize()
 		}
 
 		if ant.state == FORAGE {
