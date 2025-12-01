@@ -12,11 +12,11 @@ const (
 	GAME_SIZE = 1000
 
 	ANT_SPEED         = 2.5
-	ANT_SENSOR_RADIUS = 30.0
+	ANT_SENSOR_RADIUS = 100.0
 
-	PHEROMONE_DECAY              = (1.0 / 60.0) / 30.0 // denominator is number of seconds until decay
-	PHEROMONE_INFLUENCE_DISCOUNT = 1.00                // reduce effect of pheromone on ant direction
-	PHEROMONE_DROP_PROB          = 1.0 / 60.0          // odds of dropping a pheromone per tick
+	PHEROMONE_DECAY              = (1.0 / 60.0) / 5.0 // denominator is number of seconds until decay
+	PHEROMONE_INFLUENCE_DISCOUNT = 1.00               // reduce effect of pheromone on ant direction
+	PHEROMONE_DROP_PROB          = 1.0 / 60.0         // odds of dropping a pheromone per tick
 
 	FOOD_START = 10
 )
@@ -72,7 +72,7 @@ func NewGame() *Game {
 	food := kdtree.New(nil)
 	hills := kdtree.New(nil)
 
-	for range 1000 {
+	for range 500 {
 		ants.Insert(Ant{
 			Vector: Vector{GAME_SIZE / 2, GAME_SIZE / 2},
 			dir:    Vector{Rand(-1, 1), Rand(-1, 1)},
@@ -80,7 +80,7 @@ func NewGame() *Game {
 		})
 	}
 
-	for r := range 20 {
+	for r := range 60 {
 		for c := range 20 {
 			food.Insert(&Food{
 				Vector: &Vector{x: GAME_SIZE/3 + float64(r), y: GAME_SIZE/3 + float64(c)},
@@ -162,7 +162,7 @@ func (g *Game) updateAnts() {
 			// scale by weight, distance to ant, and angular similarity
 			strength := float64(pher.amount)
 			strength = strength / max(0.1, ant.Vector.Distance(spot)) // prevent overweighting really close smells
-			strength *= ant.dir.CosineSimilarity(dirToSpot)
+			strength *= max(ant.dir.CosineSimilarity(dirToSpot), 0.0) // prefer signals in front, ignore behind
 			pheromoneDir = pheromoneDir.Add(dirToSpot.Mul(strength))
 		}
 
