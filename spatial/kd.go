@@ -46,7 +46,7 @@ func (t *KyroyKD[T]) Chan() chan T {
 	return dst
 }
 
-func (t *KyroyKD[T]) RadialSearch(center T, radius float64, dst func(a T, b T) float64) []T {
+func (t *KyroyKD[T]) RadialSearch(center T, radius float64, dst2 func(a T, b T) float64) []T {
 	// implemented via range search, followed by filter on dist
 	// 2d KD tree allows for range search in a rectangle.
 	// we find points in the rectangle, then filter down to those within a circle bound by the rectangle
@@ -58,8 +58,10 @@ func (t *KyroyKD[T]) RadialSearch(center T, radius float64, dst func(a T, b T) f
 	points := t.RangeSearch(kdrange.New(xMin, xMax, yMin, yMax))
 	result := make([]T, 0)
 
+	r2 := radius * radius
+
 	for _, point := range points {
-		if dst(center, point) <= radius {
+		if dst2(center, point) <= r2 {
 			result = append(result, point)
 		}
 	}

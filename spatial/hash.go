@@ -55,28 +55,27 @@ func (h *Hash[T]) Insert(p T) {
 func (h *Hash[T]) Points() []T {
 	result := make([]T, 0)
 	for _, cell := range h.cells {
-		for _, e := range cell {
-			result = append(result, e)
-		}
+		result = append(result, cell...)
 	}
 
 	return result
 }
 
-func (h *Hash[T]) RadialSearch(center T, radius float64, dst func(a T, b T) float64) []T {
+func (h *Hash[T]) RadialSearch(center T, radius float64, dst2 func(a T, b T) float64) []T {
 	result := []T{}
 
 	// Determine the center cell
-	cx := int(math.Round(center.Dimension(0) / h.size))
-	cy := int(math.Round(center.Dimension(1) / h.size))
+	key := h.key(center)
 
 	// How many cells to search in each axis
 	// ceil(radius / cell_size)
 	cellRadius := int(math.Ceil(radius / h.size))
 
+	r2 := radius * radius
+
 	for dx := -cellRadius; dx <= cellRadius; dx++ {
 		for dy := -cellRadius; dy <= cellRadius; dy++ {
-			k := hashKey{x: cx + dx, y: cy + dy}
+			k := hashKey{x: key.x + dx, y: key.y + dy}
 
 			points, ok := h.cells[k]
 			if !ok {
@@ -86,7 +85,7 @@ func (h *Hash[T]) RadialSearch(center T, radius float64, dst func(a T, b T) floa
 			// Check each candidate point
 			for _, p := range points {
 				// Use provided distance metric
-				if dst(center, p) <= radius {
+				if dst2(center, p) <= r2 {
 					result = append(result, p)
 				}
 			}

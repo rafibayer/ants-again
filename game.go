@@ -8,14 +8,16 @@ import (
 	vec "github.com/rafibayer/ants-again/vector"
 )
 
-// todo: time based things should be relative to TPS
+// todo: time based things should be relative to TPS.. I think?
+// we want the same stuff to happen, but faster if we increase TPS
 const (
+	TPS       = 60
 	GAME_SIZE = 1000
 
 	ANT_SPEED       = 2.5
 	ANT_FOOD_RADIUS = 5.0              // radius in which an ant will pick up food
 	ANT_HILL_RADIUS = GAME_SIZE / 30.0 // radius in which an ant will return to hill
-	ANT_ROTATION    = 11.0             // max rotation degrees in either direction per tick
+	ANT_ROTATION    = 9.0              // max rotation degrees in either direction per tick
 	ANT_BOUNDARY    = TURN             // if true, ants will wrap around to the other side instead of turning at boundaries
 
 	PHEROMONE_SENSE_RADIUS float64 = GAME_SIZE / 6.0     // radius in which an ant will smell pheromones
@@ -23,7 +25,7 @@ const (
 	PHEROMONE_DROP_PROB            = 1.0 / 120.0         // odds of dropping a pheromone per tick
 
 	// we can tune perf with these, less sensing, but with more effect to reduce kdtree searches
-	PHEROMONE_INFLUENCE  = 2.00      // increase or decrease effect of pheromone on direction
+	PHEROMONE_INFLUENCE  = 2.0       // increase or decrease effect of pheromone on direction
 	PHEROMONE_SENSE_PROB = 1.0 / 5.0 // odds of smelling for pheromones per tick
 
 	FOOD_START = 50
@@ -74,19 +76,22 @@ type Game struct {
 	world *ebiten.Image
 	px    []byte // pixel buffer: width * height * 4 (R,G,B,A)
 
-	ants  []*Ant
-	food  spatial.Spatial[*Food]
-	hills spatial.Spatial[vec.Vector]
+	ants []*Ant
+	food spatial.Spatial[*Food]
+
+	hills         spatial.Spatial[vec.Vector]
+	collectedFood int
 
 	foragingPheromone  spatial.Spatial[*Pheromone]
 	returningPheromone spatial.Spatial[*Pheromone]
 
-	// cached tree sizes for stat reporting
+	// cached spatial data structure sizes for stat reporting
+	// todo: spatial.Hash can track size in O(1), we could drop all this
 	cachedForagingCount          int
 	cachedReturningCount         int
 	cachedForagingPheromoneCount int
 	cachedReturningPheromone     int
-	cachedFood                   int
+	cachedRemainingFood          int
 }
 
 func NewGame() *Game {
@@ -183,7 +188,7 @@ func (g *Game) updateAnts() {
 			pheromoneDir := vec.ZERO
 
 			nearby := pheromone.RadialSearch(&Pheromone{Vector: &ant.Vector}, PHEROMONE_SENSE_RADIUS, func(a, b *Pheromone) float64 {
-				return a.Distance(*b.Vector)
+				return a.Distance2(*b.Vector)
 			})
 
 			for _, pher := range nearby {
@@ -193,7 +198,7 @@ func (g *Game) updateAnts() {
 
 				// scale by weight, distance to ant, and angular similarity
 				strength := float64(pher.amount)
-				strength = strength / max(0.1, ant.Vector.Distance(*pher.Vector)) // prevent overweighting really close smells
+				strength = strength / max(0.2, ant.Vector.Distance(*pher.Vector)) // prevent overweighting really close smells
 				strength *= max(ant.dir.CosineSimilarity(dirToSpot), 0)           // LinearRemap(ant.dir.CosineSimilarity(dirToSpot))      // discount dissimilar angles
 
 				pheromoneDir = pheromoneDir.Add(dirToSpot.Mul(strength))
@@ -208,7 +213,7 @@ func (g *Game) updateAnts() {
 
 			// check for food nearby, change state and turn around
 			nearFood := g.food.RadialSearch(&Food{Vector: &ant.Vector}, ANT_FOOD_RADIUS, func(a, b *Food) float64 {
-				return a.Distance(*b.Vector)
+				return a.Distance2(*b.Vector)
 			})
 
 			for _, food := range nearFood {
@@ -224,11 +229,12 @@ func (g *Game) updateAnts() {
 		if ant.state == RETURN {
 			g.cachedReturningCount++
 
-			nearHill := g.hills.RadialSearch(ant.Vector, ANT_HILL_RADIUS, vec.Vector.Distance)
+			nearHill := g.hills.RadialSearch(ant.Vector, ANT_HILL_RADIUS, vec.Vector.Distance2)
 			// check for hill nearby, change state and turn around
 			if len(nearHill) > 0 {
 				// turn around and go back to foraging
 				ant.state = FORAGE
+				g.collectedFood++
 				ant.dir = ant.dir.Mul(-1.0)
 			}
 		}
@@ -312,10 +318,10 @@ func (g *Game) updatePheromones() {
 }
 
 func (g *Game) updateFood() {
-	g.cachedFood = 0
+	g.cachedRemainingFood = 0
 
 	for food := range g.food.Chan() {
-		g.cachedFood += food.amount
+		g.cachedRemainingFood += food.amount
 
 		if food.amount <= 0 {
 			g.food.Remove(food)

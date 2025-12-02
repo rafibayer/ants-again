@@ -1,3 +1,8 @@
+other sims
+- https://openprocessing.org/sketch/15109/
+- https://www.reddit.com/r/rust/comments/15dp0hq/media_ant_colony_simulation_in_rust_and_bevy/
+  - https://github.com/bones-ai/rust-ants-colony-simulation
+
 go tool pprof cpu.prof
 go tool pprof -dot cpu.prof > cpu.dot
 

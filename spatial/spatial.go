@@ -6,5 +6,5 @@ type Spatial[T any] interface {
 	Points() []T
 	Chan() chan T // same as points, but returns an unbuffered channel to reduce allocation
 	Remove(p T) T
-	RadialSearch(center T, radius float64, dst func(a T, b T) float64) []T
+	RadialSearch(center T, radius float64, dst2 func(a T, b T) float64) []T
 }

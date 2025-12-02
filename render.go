@@ -44,11 +44,15 @@ func drawScreenSpace(g *Game, screen *ebiten.Image) {
 		tps string
 
 		ants struct {
-			foragers  int
+			foraging  int
 			returning int
 		}
-		food      int
-		pheromone struct {
+		food struct {
+			remaining int
+			collected int
+		}
+		remainingFood int
+		pheromone     struct {
 			forage   int
 			returing int
 		}
@@ -56,13 +60,19 @@ func drawScreenSpace(g *Game, screen *ebiten.Image) {
 		fps: fmt.Sprintf("%.0f", ebiten.ActualFPS()),
 		tps: fmt.Sprintf("%.0f", ebiten.ActualTPS()),
 		ants: struct {
-			foragers  int
+			foraging  int
 			returning int
 		}{
-			foragers:  g.cachedForagingCount,
+			foraging:  g.cachedForagingCount,
 			returning: g.cachedReturningCount,
 		},
-		food: g.cachedFood,
+		food: struct {
+			remaining int
+			collected int
+		}{
+			remaining: g.cachedRemainingFood,
+			collected: g.collectedFood,
+		},
 		pheromone: struct {
 			forage   int
 			returing int

@@ -22,7 +22,7 @@ func main() {
 
 	game := NewGame()
 
-	ebiten.SetTPS(60)
+	ebiten.SetTPS(TPS)
 
 	ebiten.SetWindowSize(800, 600)
 	ebiten.SetWindowTitle("Hello, World!")
