@@ -22,6 +22,8 @@ func main() {
 
 	game := NewGame()
 
+	ebiten.SetTPS(60)
+
 	ebiten.SetWindowSize(800, 600)
 	ebiten.SetWindowTitle("Hello, World!")
 	if err := ebiten.RunGame(game); err != nil {

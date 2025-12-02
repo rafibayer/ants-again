@@ -90,10 +90,13 @@ func drawWorldSpace(g *Game) {
 }
 
 func (g *Game) drawAnts() {
-	for _, ant := range g.ants {
+	for i, ant := range g.ants {
 
 		// debug circle -- food search area
-		// vec.Vector.StrokeCircle(g.world, float32(ant.X), float32(ant.Y), PHEROMONE_SENSE_RADIUS, 1.0, color.White, false)
+		// if i%100 == 0 {
+		// 	vector.StrokeCircle(g.world, float32(ant.X), float32(ant.Y), float32(PHEROMONE_SENSE_RADIUS), 1.0, color.White, false)
+		// }
+		_ = i
 
 		// 1 away from ant facing
 		tail := ant.Add(ant.dir.Normalize().Mul(-5))

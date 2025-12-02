@@ -14,7 +14,7 @@ const (
 	ANT_SPEED       = 2.5
 	ANT_FOOD_RADIUS = 5.0              // radius in which an ant will pick up food
 	ANT_HILL_RADIUS = GAME_SIZE / 30.0 // radius in which an ant will return to hill
-	ANT_ROTATION    = 7.0              // max rotation degrees in either direction per tick
+	ANT_ROTATION    = 11.0             // max rotation degrees in either direction per tick
 	ANT_BOUNDARY    = TURN             // if true, ants will wrap around to the other side instead of turning at boundaries
 
 	PHEROMONE_SENSE_RADIUS float64 = GAME_SIZE / 6.0     // radius in which an ant will smell pheromones
@@ -132,8 +132,10 @@ func NewGame() *Game {
 		food:  food,
 		hills: hills,
 
-		foragingPheromone:  spatial.NewHash[*Pheromone](GAME_SIZE / 20.0),
-		returningPheromone: spatial.NewHash[*Pheromone](GAME_SIZE / 20.0),
+		// spatial hash size his a fairly import perf knob -- if these are mis-sized,
+		// the cells get too crowded, or we have to search too many of them
+		foragingPheromone:  spatial.NewHash[*Pheromone](GAME_SIZE / 20),
+		returningPheromone: spatial.NewHash[*Pheromone](GAME_SIZE / 20),
 	}
 }
 
