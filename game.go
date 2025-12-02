@@ -15,7 +15,7 @@ const (
 	ANT_FOOD_RADIUS = 5.0              // radius in which an ant will pick up food
 	ANT_HILL_RADIUS = GAME_SIZE / 30.0 // radius in which an ant will return to hill
 	ANT_ROTATION    = 11.0             // max rotation degrees in either direction per tick
-	ANT_BOUNDARY    = TURN             // if true, ants will wrap around to the other side instead of turning at boundaries
+	ANT_BOUNDARY    = WRAP             // if true, ants will wrap around to the other side instead of turning at boundaries
 
 	PHEROMONE_SENSE_RADIUS float64 = GAME_SIZE / 6.0     // radius in which an ant will smell pheromones
 	PHEROMONE_DECAY                = (1.0 / 60.0) / 15.0 // denominator is number of seconds until decay
@@ -103,13 +103,21 @@ func NewGame() *Game {
 
 	for r := range 30 {
 		for c := range 10 {
+			// top left
 			food.Insert(&Food{
 				Vector: &vec.Vector{X: GAME_SIZE/5 + float64(r)*1.5, Y: GAME_SIZE/5 + float64(c)*1.5},
 				amount: FOOD_START,
 			})
 
+			// mid right
 			food.Insert(&Food{
 				Vector: &vec.Vector{X: GAME_SIZE*(5.0/6.0) + float64(r)*1.5, Y: GAME_SIZE/2 + float64(c)*1.5},
+				amount: FOOD_START,
+			})
+
+			// far bottom right
+			food.Insert(&Food{
+				Vector: &vec.Vector{X: GAME_SIZE*(9.0/10.0) + float64(r)*1.5, Y: GAME_SIZE*(9.0/10.0) + float64(c)*1.5},
 				amount: FOOD_START,
 			})
 		}
@@ -186,7 +194,7 @@ func (g *Game) updateAnts() {
 				// scale by weight, distance to ant, and angular similarity
 				strength := float64(pher.amount)
 				strength = strength / max(0.1, ant.Vector.Distance(*pher.Vector)) // prevent overweighting really close smells
-				strength *= LinearRemap(ant.dir.CosineSimilarity(dirToSpot))      // discount dissimilar angles
+				strength *= max(ant.dir.CosineSimilarity(dirToSpot), 0)           // LinearRemap(ant.dir.CosineSimilarity(dirToSpot))      // discount dissimilar angles
 
 				pheromoneDir = pheromoneDir.Add(dirToSpot.Mul(strength))
 			}
