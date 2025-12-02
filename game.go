@@ -5,7 +5,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/rafibayer/ants-again/spatial"
-	vec "github.com/rafibayer/ants-again/vector"
+	"github.com/rafibayer/ants-again/vector"
 )
 
 // todo: time based things should be relative to TPS.. I think?
@@ -33,7 +33,7 @@ const (
 
 type Food struct {
 	// Position
-	*vec.Vector
+	*vector.Vector
 
 	amount int
 }
@@ -47,9 +47,9 @@ const (
 
 type Ant struct {
 	// position
-	vec.Vector
+	vector.Vector
 
-	dir   vec.Vector
+	dir   vector.Vector
 	state AntState
 }
 
@@ -62,7 +62,7 @@ const (
 
 type Pheromone struct {
 	// position
-	*vec.Vector
+	*vector.Vector
 
 	amount float32
 }
@@ -79,7 +79,7 @@ type Game struct {
 	ants []*Ant
 	food spatial.Spatial[*Food]
 
-	hills         spatial.Spatial[vec.Vector]
+	hills         spatial.Spatial[vector.Vector]
 	collectedFood int
 
 	foragingPheromone  spatial.Spatial[*Pheromone]
@@ -97,12 +97,12 @@ type Game struct {
 func NewGame() *Game {
 	ants := []*Ant{}
 	food := spatial.NewHash[*Food](GAME_SIZE / 100.0)
-	hills := spatial.NewHash[vec.Vector](GAME_SIZE / 5.0)
+	hills := spatial.NewHash[vector.Vector](GAME_SIZE / 5.0)
 
 	for range 1000 {
 		ants = append(ants, &Ant{
-			Vector: vec.Vector{X: GAME_SIZE / 2, Y: GAME_SIZE / 2},
-			dir:    vec.Vector{X: Rand(-1, 1), Y: Rand(-1, 1)},
+			Vector: vector.Vector{X: GAME_SIZE / 2, Y: GAME_SIZE / 2},
+			dir:    vector.Vector{X: Rand(-1, 1), Y: Rand(-1, 1)},
 			state:  FORAGE,
 		})
 	}
@@ -111,25 +111,25 @@ func NewGame() *Game {
 		for c := range 10 {
 			// top left
 			food.Insert(&Food{
-				Vector: &vec.Vector{X: GAME_SIZE/5 + float64(r)*1.5, Y: GAME_SIZE/5 + float64(c)*1.5},
+				Vector: &vector.Vector{X: GAME_SIZE/5 + float64(r)*1.5, Y: GAME_SIZE/5 + float64(c)*1.5},
 				amount: FOOD_START,
 			})
 
 			// mid right
 			food.Insert(&Food{
-				Vector: &vec.Vector{X: GAME_SIZE*(5.0/6.0) + float64(r)*1.5, Y: GAME_SIZE/2 + float64(c)*1.5},
+				Vector: &vector.Vector{X: GAME_SIZE*(5.0/6.0) + float64(r)*1.5, Y: GAME_SIZE/2 + float64(c)*1.5},
 				amount: FOOD_START,
 			})
 
 			// far bottom right
 			food.Insert(&Food{
-				Vector: &vec.Vector{X: GAME_SIZE*(9.0/10.0) + float64(r)*1.5, Y: GAME_SIZE*(9.0/10.0) + float64(c)*1.5},
+				Vector: &vector.Vector{X: GAME_SIZE*(9.0/10.0) + float64(r)*1.5, Y: GAME_SIZE*(9.0/10.0) + float64(c)*1.5},
 				amount: FOOD_START,
 			})
 		}
 	}
 
-	hills.Insert(vec.Vector{X: GAME_SIZE / 2, Y: GAME_SIZE / 2})
+	hills.Insert(vector.Vector{X: GAME_SIZE / 2, Y: GAME_SIZE / 2})
 
 	return &Game{
 		frameCount: 0,
@@ -185,14 +185,11 @@ func (g *Game) updateAnts() {
 			}
 
 			// influence direction based on pheromone
-			pheromoneDir := vec.ZERO
+			pheromoneDir := vector.ZERO
 
-			nearby := pheromone.RadialSearch(&Pheromone{Vector: &ant.Vector}, PHEROMONE_SENSE_RADIUS, func(a, b *Pheromone) float64 {
-				return a.Distance2(*b.Vector)
-			})
+			nearby := pheromone.RadialSearch(ant.Vector, PHEROMONE_SENSE_RADIUS)
 
 			for _, pher := range nearby {
-
 				// direction to pheromone and signal strength
 				dirToSpot := pher.Sub(ant.Vector).Normalize()
 
@@ -212,9 +209,7 @@ func (g *Game) updateAnts() {
 			g.cachedForagingCount++
 
 			// check for food nearby, change state and turn around
-			nearFood := g.food.RadialSearch(&Food{Vector: &ant.Vector}, ANT_FOOD_RADIUS, func(a, b *Food) float64 {
-				return a.Distance2(*b.Vector)
-			})
+			nearFood := g.food.RadialSearch(ant.Vector, ANT_FOOD_RADIUS)
 
 			for _, food := range nearFood {
 				if food.amount > 0 {
@@ -229,7 +224,7 @@ func (g *Game) updateAnts() {
 		if ant.state == RETURN {
 			g.cachedReturningCount++
 
-			nearHill := g.hills.RadialSearch(ant.Vector, ANT_HILL_RADIUS, vec.Vector.Distance2)
+			nearHill := g.hills.RadialSearch(ant.Vector, ANT_HILL_RADIUS)
 			// check for hill nearby, change state and turn around
 			if len(nearHill) > 0 {
 				// turn around and go back to foraging
@@ -244,9 +239,9 @@ func (g *Game) updateAnts() {
 		if dropPheromone {
 			switch ant.state {
 			case FORAGE:
-				g.foragingPheromone.Insert(&Pheromone{Vector: &vec.Vector{X: ant.X, Y: ant.Y}, amount: 1.0})
+				g.foragingPheromone.Insert(&Pheromone{Vector: &vector.Vector{X: ant.X, Y: ant.Y}, amount: 1.0})
 			case RETURN:
-				g.returningPheromone.Insert(&Pheromone{Vector: &vec.Vector{X: ant.X, Y: ant.Y}, amount: 1.0})
+				g.returningPheromone.Insert(&Pheromone{Vector: &vector.Vector{X: ant.X, Y: ant.Y}, amount: 1.0})
 			}
 		}
 

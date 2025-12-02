@@ -1,4 +1,4 @@
-package vec
+package vector
 
 import (
 	"math"
@@ -10,15 +10,6 @@ var (
 
 type Vector struct {
 	X, Y float64
-}
-
-func (p Vector) Dimension(i int) float64 {
-	// branchless, undefined behavior if 'i' not in {0, 1}
-	return p.X*float64(1-i) + p.Y*float64(i)
-}
-
-func (p Vector) Dimensions() int {
-	return 2
 }
 
 func (p Vector) Distance2(other Vector) float64 {

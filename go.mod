@@ -6,8 +6,6 @@ toolchain go1.24.10
 
 require (
 	github.com/hajimehoshi/ebiten/v2 v2.9.3
-	github.com/kyroy/kdtree v0.0.0-20200419114247-70830f883f1d
-	github.com/kyroy/priority-queue v0.0.0-20180327160706-6e21825e7e0c
 	github.com/stretchr/testify v1.11.1
 )
 

@@ -3,30 +3,30 @@ package spatial
 import (
 	"math"
 
-	"github.com/rafibayer/ants-again/kdtree"
+	"github.com/rafibayer/ants-again/vector"
 )
 
 type hashKey struct {
 	x, y int
 }
 
-type Hash[T kdtree.Point] struct {
+type Hash[T vector.Point] struct {
 	size  float64
 	cells map[hashKey][]T
 }
 
-var _ Spatial[kdtree.Point] = &Hash[kdtree.Point]{}
+var _ Spatial[vector.Point] = &Hash[vector.Point]{}
 
-func NewHash[T kdtree.Point](size float64) Spatial[T] {
+func NewHash[T vector.Point](size float64) Spatial[T] {
 	return &Hash[T]{
 		size:  size,
 		cells: map[hashKey][]T{},
 	}
 }
 
-func (h *Hash[T]) key(p T) hashKey {
-	x := int(math.Floor(p.Dimension(0) / h.size))
-	y := int(math.Floor(p.Dimension(1) / h.size))
+func (h *Hash[T]) key(p vector.Point) hashKey {
+	x := int(math.Floor(p.GetX() / h.size))
+	y := int(math.Floor(p.GetY() / h.size))
 
 	return hashKey{x: int(x), y: int(y)}
 }
@@ -61,7 +61,7 @@ func (h *Hash[T]) Points() []T {
 	return result
 }
 
-func (h *Hash[T]) RadialSearch(center T, radius float64, dst2 func(a T, b T) float64) []T {
+func (h *Hash[T]) RadialSearch(center vector.Point, radius float64) []T {
 	result := []T{}
 
 	// Determine the center cell
@@ -85,7 +85,9 @@ func (h *Hash[T]) RadialSearch(center T, radius float64, dst2 func(a T, b T) flo
 			// Check each candidate point
 			for _, p := range points {
 				// Use provided distance metric
-				if dst2(center, p) <= r2 {
+				xDiff := center.GetX() - p.GetX()
+				yDiff := center.GetY() - p.GetY()
+				if (xDiff*xDiff + yDiff*yDiff) <= r2 {
 					result = append(result, p)
 				}
 			}
@@ -100,7 +102,7 @@ func (h *Hash[T]) Remove(p T) T {
 
 	index := -1
 	for i, c := range h.cells[k] {
-		if c.Dimension(0) == p.Dimension(0) && c.Dimension(1) == p.Dimension(1) {
+		if c.GetX() == p.GetX() && c.GetY() == p.GetY() {
 			index = i
 			break
 		}
