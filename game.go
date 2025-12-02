@@ -12,8 +12,10 @@ const (
 	GAME_SIZE = 1000
 
 	ANT_SPEED       = 2.5
-	ANT_FOOD_RADIUS = 5.0  // radius in which an ant will pick up food
-	ANT_HILL_RADIUS = 20.0 // radius in which an ant will return to hill
+	ANT_FOOD_RADIUS = 5.0              // radius in which an ant will pick up food
+	ANT_HILL_RADIUS = GAME_SIZE / 30.0 // radius in which an ant will return to hill
+	ANT_ROTATION    = 7.0              // max rotation degrees in either direction per tick
+	ANT_BOUNDARY    = TURN             // if true, ants will wrap around to the other side instead of turning at boundaries
 
 	PHEROMONE_SENSE_RADIUS float64 = GAME_SIZE / 6.0     // radius in which an ant will smell pheromones
 	PHEROMONE_DECAY                = (1.0 / 60.0) / 15.0 // denominator is number of seconds until decay
@@ -48,6 +50,13 @@ type Ant struct {
 	state AntState
 }
 
+type BoundaryBehavior int
+
+const (
+	WRAP BoundaryBehavior = iota
+	TURN
+)
+
 type Pheromone struct {
 	// position
 	*vec.Vector
@@ -62,7 +71,7 @@ type Game struct {
 	zoom       float64
 
 	world *ebiten.Image
-	px    []byte // RGBA buffer: width * height * 4
+	px    []byte // pixel buffer: width * height * 4 (R,G,B,A)
 
 	ants  []*Ant
 	food  spatial.Spatial[*Food]
@@ -87,7 +96,7 @@ func NewGame() *Game {
 	for range 1000 {
 		ants = append(ants, &Ant{
 			Vector: vec.Vector{X: GAME_SIZE / 2, Y: GAME_SIZE / 2},
-			dir:    vec.Vector{Rand(-1, 1), Rand(-1, 1)},
+			dir:    vec.Vector{X: Rand(-1, 1), Y: Rand(-1, 1)},
 			state:  FORAGE,
 		})
 	}
@@ -106,7 +115,7 @@ func NewGame() *Game {
 		}
 	}
 
-	hills.Insert(vec.Vector{GAME_SIZE / 2, GAME_SIZE / 2})
+	hills.Insert(vec.Vector{X: GAME_SIZE / 2, Y: GAME_SIZE / 2})
 
 	return &Game{
 		frameCount: 0,
@@ -148,7 +157,7 @@ func (g *Game) updateAnts() {
 		ant.Vector = ant.Add(ant.dir.Normalize().Mul(ANT_SPEED))
 
 		// randomly rotate a few degrees
-		ant.dir = ant.dir.Rotate(Rand(-8, 8))
+		ant.dir = ant.dir.Rotate(Rand(-ANT_ROTATION, ANT_ROTATION))
 
 		row, col := ant.ToGrid()
 		keepInbounds(ant, row, col)
@@ -205,9 +214,7 @@ func (g *Game) updateAnts() {
 		if ant.state == RETURN {
 			g.cachedReturningCount++
 
-			nearHill := g.hills.RadialSearch(ant.Vector, ANT_HILL_RADIUS, func(a, b vec.Vector) float64 {
-				return a.Distance(b)
-			})
+			nearHill := g.hills.RadialSearch(ant.Vector, ANT_HILL_RADIUS, vec.Vector.Distance)
 			// check for hill nearby, change state and turn around
 			if len(nearHill) > 0 {
 				// turn around and go back to foraging
@@ -231,39 +238,66 @@ func (g *Game) updateAnts() {
 }
 
 func keepInbounds(ant *Ant, row int, col int) {
-	if row < 0 {
-		ant.dir.Y = 1
+	if ANT_BOUNDARY == WRAP {
+		if row < 0 {
+			ant.Y = GAME_SIZE
+		}
+		if row >= GAME_SIZE {
+			ant.Y = 0
+		}
+		if col < 0 {
+			ant.X = GAME_SIZE
+		}
+		if col >= GAME_SIZE {
+			ant.X = 0
+		}
 	}
-	if row >= GAME_SIZE {
-		ant.dir.Y = -1
-	}
-	if col < 0 {
-		ant.dir.X = 1
-	}
-	if col >= GAME_SIZE {
-		ant.dir.X = -1
+
+	if ANT_BOUNDARY == TURN {
+		if row < 0 {
+			ant.dir.Y = 1
+		}
+		if row >= GAME_SIZE {
+			ant.dir.Y = -1
+		}
+		if col < 0 {
+			ant.dir.X = 1
+		}
+		if col >= GAME_SIZE {
+			ant.dir.X = -1
+		}
 	}
 }
 
 func (g *Game) updatePheromones() {
 	g.cachedForagingPheromoneCount = 0
+	toRemove := make([]*Pheromone, 0)
 	for pher := range g.foragingPheromone.Chan() {
 		g.cachedForagingPheromoneCount++
 
 		pher.amount -= PHEROMONE_DECAY
 		if pher.amount <= 0 {
-			g.foragingPheromone.Remove(pher)
+			toRemove = append(toRemove, pher)
 		}
 	}
 
+	for _, r := range toRemove {
+		g.foragingPheromone.Remove(r)
+	}
+
 	g.cachedReturningPheromone = 0
+	toRemove = make([]*Pheromone, 0)
 	for pher := range g.returningPheromone.Chan() {
 		g.cachedReturningPheromone++
 
 		pher.amount -= PHEROMONE_DECAY
 		if pher.amount <= 0 {
-			g.returningPheromone.Remove(pher)
+			toRemove = append(toRemove, pher)
 		}
+	}
+
+	for _, r := range toRemove {
+		g.returningPheromone.Remove(r)
 	}
 }
 
