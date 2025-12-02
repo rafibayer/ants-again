@@ -64,27 +64,51 @@ func (h *Hash[T]) Points() []T {
 func (h *Hash[T]) RadialSearch(center vector.Point, radius float64) []T {
 	result := []T{}
 
-	// Determine the center cell
-	key := h.key(center)
+	// 1. Determine the center cell and search bounds
+	cx := int(math.Floor(center.GetX() / h.size))
+	cy := int(math.Floor(center.GetY() / h.size))
 
-	// How many cells to search in each axis
 	// ceil(radius / cell_size)
 	cellRadius := int(math.Ceil(radius / h.size))
-
 	r2 := radius * radius
 
+	// 2. Iterate the square grid of candidates
 	for dx := -cellRadius; dx <= cellRadius; dx++ {
 		for dy := -cellRadius; dy <= cellRadius; dy++ {
-			k := hashKey{x: key.x + dx, y: key.y + dy}
+			key := hashKey{x: cx + dx, y: cy + dy}
 
-			points, ok := h.cells[k]
-			if !ok {
+			// Optimization 1: Check map existence first.
+			// If the cell is empty, we don't care if it overlaps.
+			points, ok := h.cells[key]
+			if !ok || len(points) == 0 {
 				continue
 			}
 
-			// Check each candidate point
+			// Optimization 2: Cell-Circle Intersection Test
+			// We find the closest point on the grid cell to the search center.
+			// Calculate cell bounds
+			minX := float64(key.x) * h.size
+			maxX := minX + h.size
+			minY := float64(key.y) * h.size
+			maxY := minY + h.size
+
+			// Clamp the center to the cell bounds to find the closest point
+			closestX := math.Max(minX, math.Min(center.GetX(), maxX))
+			closestY := math.Max(minY, math.Min(center.GetY(), maxY))
+
+			// Calculate squared distance from center to that closest point
+			distX := center.GetX() - closestX
+			distY := center.GetY() - closestY
+			distSq := (distX * distX) + (distY * distY)
+
+			// If the closest point on the square is outside the radius,
+			// the whole square is outside.
+			if distSq > r2 {
+				continue
+			}
+
+			// 3. Point-Circle Intersection Test (Standard)
 			for _, p := range points {
-				// Use provided distance metric
 				xDiff := center.GetX() - p.GetX()
 				yDiff := center.GetY() - p.GetY()
 				if (xDiff*xDiff + yDiff*yDiff) <= r2 {
