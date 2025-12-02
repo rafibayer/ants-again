@@ -5,7 +5,7 @@ import (
 	"image/color"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/rafibayer/ants-again/kdtree"
+	"github.com/rafibayer/ants-again/spatial"
 
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/vector"
@@ -43,16 +43,25 @@ func drawScreenSpace(g *Game, screen *ebiten.Image) {
 		fps string
 		tps string
 
-		ants      int
+		ants struct {
+			foragers  int
+			returning int
+		}
 		food      int
 		pheromone struct {
 			forage   int
 			returing int
 		}
 	}{
-		fps:  fmt.Sprintf("%.0f", ebiten.ActualFPS()),
-		tps:  fmt.Sprintf("%.0f", ebiten.ActualTPS()),
-		ants: len(g.ants),
+		fps: fmt.Sprintf("%.0f", ebiten.ActualFPS()),
+		tps: fmt.Sprintf("%.0f", ebiten.ActualTPS()),
+		ants: struct {
+			foragers  int
+			returning int
+		}{
+			foragers:  g.cachedForagingCount,
+			returning: g.cachedReturningCount,
+		},
 		food: g.cachedFood,
 		pheromone: struct {
 			forage   int
@@ -70,6 +79,8 @@ func drawWorldSpace(g *Game) {
 	// has to be first because of use of "writePixels"
 	g.drawPheromones()
 
+	// g.naiveDrawPheromones()
+
 	g.drawAnts()
 	g.drawFood()
 	g.drawHills()
@@ -82,7 +93,7 @@ func (g *Game) drawAnts() {
 	for _, ant := range g.ants {
 
 		// debug circle -- food search area
-		// vector.StrokeCircle(g.world, float32(ant.x), float32(ant.y), PHEROMONE_SENSE_RADIUS, 1.0, color.White, false)
+		// vec.Vector.StrokeCircle(g.world, float32(ant.X), float32(ant.Y), PHEROMONE_SENSE_RADIUS, 1.0, color.White, false)
 
 		// 1 away from ant facing
 		tail := ant.Add(ant.dir.Normalize().Mul(-5))
@@ -92,24 +103,20 @@ func (g *Game) drawAnts() {
 			c = LILAC
 		}
 
-		vector.StrokeLine(g.world, float32(ant.x), float32(ant.y), float32(tail.x), float32(tail.y), 2, c, false)
+		vector.StrokeLine(g.world, float32(ant.X), float32(ant.Y), float32(tail.X), float32(tail.Y), 2, c, false)
 	}
 }
 
 func (g *Game) drawFood() {
-	for f := range g.food.Chan() {
-		food := f.(*Food)
-
+	for food := range g.food.Chan() {
 		c := Fade(BROWN, float32(food.amount/FOOD_START))
-		vector.FillRect(g.world, float32(food.x), float32(food.y), 1.5, 1.5, c, false)
+		vector.FillRect(g.world, float32(food.X), float32(food.Y), 1.5, 1.5, c, false)
 	}
 }
 
 func (g *Game) drawHills() {
-	for h := range g.hills.Chan() {
-		hill := h.(Vector)
-
-		vector.FillCircle(g.world, float32(hill.x), float32(hill.y), ANT_HILL_RADIUS, WHITE, false)
+	for hill := range g.hills.Chan() {
+		vector.FillCircle(g.world, float32(hill.X), float32(hill.Y), ANT_HILL_RADIUS, WHITE, false)
 	}
 }
 
@@ -119,15 +126,13 @@ func (g *Game) drawPheromones() {
 		g.px[i] = 0
 	}
 
-	writePheromones := func(ph *kdtree.KDTree, color color.RGBA) {
-		for p := range ph.Chan() {
-			pher := p.(*Pheromone)
-
+	writePheromones := func(ph spatial.Spatial[*Pheromone], color color.RGBA) {
+		for pher := range ph.Chan() {
 			// Fade color by pheromone amount (0..1)
 			c := Fade(color, pher.amount)
 
-			x := int(pher.x)
-			y := int(pher.y)
+			x := int(pher.X)
+			y := int(pher.Y)
 			if x < 0 || x >= GAME_SIZE || y < 0 || y >= GAME_SIZE {
 				continue
 			}
@@ -145,6 +150,18 @@ func (g *Game) drawPheromones() {
 
 	// Write the pixel buffer to the ebiten.Image once
 	g.world.WritePixels(g.px)
+}
+
+func (g *Game) naiveDrawPheromones() {
+	for pher := range g.foragingPheromone.Chan() {
+		c := Fade(DARK_GREEN, pher.amount)
+		vector.FillRect(g.world, float32(pher.X), float32(pher.Y), 3.0, 3.0, c, false)
+	}
+
+	for pher := range g.returningPheromone.Chan() {
+		c := Fade(DARK_LILAC, pher.amount)
+		vector.FillRect(g.world, float32(pher.X), float32(pher.Y), 3.0, 3.0, c, false)
+	}
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {

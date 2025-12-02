@@ -30,3 +30,8 @@ anti-aliasing was also very expensive, not needed
 
 next steps
 - should we keep turning around on state change? or allow sensing of pheromone behind
+
+
+trying to abstract away kdtree so we can plug and play
+- different kd tree impls
+- different spatial datastructures

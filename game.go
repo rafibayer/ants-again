@@ -4,19 +4,20 @@ import (
 	"math/rand/v2"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/rafibayer/ants-again/kdtree"
+	"github.com/rafibayer/ants-again/spatial"
+	vec "github.com/rafibayer/ants-again/vector"
 )
 
 const (
-	GAME_SIZE = 500
+	GAME_SIZE = 1000
 
 	ANT_SPEED       = 2.5
 	ANT_FOOD_RADIUS = 5.0  // radius in which an ant will pick up food
-	ANT_HILL_RADIUS = 20.0 // raidus in which an ant will return to hill
+	ANT_HILL_RADIUS = 20.0 // radius in which an ant will return to hill
 
-	PHEROMONE_SENSE_RADIUS = GAME_SIZE / 6.0     // radius in which an ant will smell pheromones
-	PHEROMONE_DECAY        = (1.0 / 60.0) / 15.0 // denominator is number of seconds until decay
-	PHEROMONE_DROP_PROB    = 1.0 / 120.0         // odds of dropping a pheromone per tick
+	PHEROMONE_SENSE_RADIUS float64 = GAME_SIZE / 6.0     // radius in which an ant will smell pheromones
+	PHEROMONE_DECAY                = (1.0 / 60.0) / 15.0 // denominator is number of seconds until decay
+	PHEROMONE_DROP_PROB            = 1.0 / 120.0         // odds of dropping a pheromone per tick
 
 	// we can tune perf with these, less sensing, but with more effect to reduce kdtree searches
 	PHEROMONE_INFLUENCE  = 2.00      // increase or decrease effect of pheromone on direction
@@ -27,7 +28,7 @@ const (
 
 type Food struct {
 	// Position
-	*Vector
+	*vec.Vector
 
 	amount int
 }
@@ -41,15 +42,15 @@ const (
 
 type Ant struct {
 	// position
-	Vector
+	vec.Vector
 
-	dir   Vector
+	dir   vec.Vector
 	state AntState
 }
 
 type Pheromone struct {
 	// position
-	*Vector
+	*vec.Vector
 
 	amount float32
 }
@@ -64,13 +65,15 @@ type Game struct {
 	px    []byte // RGBA buffer: width * height * 4
 
 	ants  []*Ant
-	food  *kdtree.KDTree
-	hills *kdtree.KDTree
+	food  spatial.Spatial[*Food]
+	hills spatial.Spatial[vec.Vector]
 
-	foragingPheromone  *kdtree.KDTree
-	returningPheromone *kdtree.KDTree
+	foragingPheromone  spatial.Spatial[*Pheromone]
+	returningPheromone spatial.Spatial[*Pheromone]
 
 	// cached tree sizes for stat reporting
+	cachedForagingCount          int
+	cachedReturningCount         int
 	cachedForagingPheromoneCount int
 	cachedReturningPheromone     int
 	cachedFood                   int
@@ -78,13 +81,13 @@ type Game struct {
 
 func NewGame() *Game {
 	ants := []*Ant{}
-	food := kdtree.New(nil)
-	hills := kdtree.New(nil)
+	food := spatial.NewHash[*Food](GAME_SIZE / 100.0)
+	hills := spatial.NewHash[vec.Vector](GAME_SIZE / 5.0)
 
-	for range 500 {
+	for range 1000 {
 		ants = append(ants, &Ant{
-			Vector: Vector{GAME_SIZE / 2, GAME_SIZE / 2},
-			dir:    Vector{Rand(-1, 1), Rand(-1, 1)},
+			Vector: vec.Vector{X: GAME_SIZE / 2, Y: GAME_SIZE / 2},
+			dir:    vec.Vector{Rand(-1, 1), Rand(-1, 1)},
 			state:  FORAGE,
 		})
 	}
@@ -92,18 +95,18 @@ func NewGame() *Game {
 	for r := range 30 {
 		for c := range 10 {
 			food.Insert(&Food{
-				Vector: &Vector{x: GAME_SIZE/5 + float64(r)*1.5, y: GAME_SIZE/5 + float64(c)*1.5},
+				Vector: &vec.Vector{X: GAME_SIZE/5 + float64(r)*1.5, Y: GAME_SIZE/5 + float64(c)*1.5},
 				amount: FOOD_START,
 			})
 
 			food.Insert(&Food{
-				Vector: &Vector{x: GAME_SIZE*(5.0/6.0) + float64(r)*1.5, y: GAME_SIZE/2 + float64(c)*1.5},
+				Vector: &vec.Vector{X: GAME_SIZE*(5.0/6.0) + float64(r)*1.5, Y: GAME_SIZE/2 + float64(c)*1.5},
 				amount: FOOD_START,
 			})
 		}
 	}
 
-	hills.Insert(Vector{GAME_SIZE / 2, GAME_SIZE / 2})
+	hills.Insert(vec.Vector{GAME_SIZE / 2, GAME_SIZE / 2})
 
 	return &Game{
 		frameCount: 0,
@@ -120,8 +123,8 @@ func NewGame() *Game {
 		food:  food,
 		hills: hills,
 
-		foragingPheromone:  kdtree.New(nil),
-		returningPheromone: kdtree.New(nil),
+		foragingPheromone:  spatial.NewHash[*Pheromone](GAME_SIZE / 20.0),
+		returningPheromone: spatial.NewHash[*Pheromone](GAME_SIZE / 20.0),
 	}
 }
 
@@ -137,13 +140,15 @@ func (g *Game) Update() error {
 }
 
 func (g *Game) updateAnts() {
+	g.cachedForagingCount = 0
+	g.cachedReturningCount = 0
 
 	// update each ant, add to next and state
 	for _, ant := range g.ants {
 		ant.Vector = ant.Add(ant.dir.Normalize().Mul(ANT_SPEED))
 
 		// randomly rotate a few degrees
-		ant.dir = ant.dir.Rotate(Rand(-5, 5))
+		ant.dir = ant.dir.Rotate(Rand(-8, 8))
 
 		row, col := ant.ToGrid()
 		keepInbounds(ant, row, col)
@@ -156,11 +161,13 @@ func (g *Game) updateAnts() {
 			}
 
 			// influence direction based on pheromone
-			pheromoneDir := ZERO
-			nearby := KDSearchRadius(pheromone, ant.Vector, PHEROMONE_SENSE_RADIUS)
+			pheromoneDir := vec.ZERO
 
-			for _, p := range nearby {
-				pher := p.(*Pheromone)
+			nearby := pheromone.RadialSearch(&Pheromone{Vector: &ant.Vector}, PHEROMONE_SENSE_RADIUS, func(a, b *Pheromone) float64 {
+				return a.Distance(*b.Vector)
+			})
+
+			for _, pher := range nearby {
 
 				// direction to pheromone and signal strength
 				dirToSpot := pher.Sub(ant.Vector).Normalize()
@@ -178,10 +185,14 @@ func (g *Game) updateAnts() {
 		}
 
 		if ant.state == FORAGE {
+			g.cachedForagingCount++
+
 			// check for food nearby, change state and turn around
-			nearFood := KDSearchRadius(g.food, ant.Vector, ANT_FOOD_RADIUS)
-			for _, f := range nearFood {
-				food := f.(*Food)
+			nearFood := g.food.RadialSearch(&Food{Vector: &ant.Vector}, ANT_FOOD_RADIUS, func(a, b *Food) float64 {
+				return a.Distance(*b.Vector)
+			})
+
+			for _, food := range nearFood {
 				if food.amount > 0 {
 					food.amount--
 					ant.state = RETURN
@@ -192,8 +203,12 @@ func (g *Game) updateAnts() {
 		}
 
 		if ant.state == RETURN {
+			g.cachedReturningCount++
+
+			nearHill := g.hills.RadialSearch(ant.Vector, ANT_HILL_RADIUS, func(a, b vec.Vector) float64 {
+				return a.Distance(b)
+			})
 			// check for hill nearby, change state and turn around
-			nearHill := KDSearchRadius(g.hills, ant.Vector, ANT_HILL_RADIUS)
 			if len(nearHill) > 0 {
 				// turn around and go back to foraging
 				ant.state = FORAGE
@@ -206,9 +221,9 @@ func (g *Game) updateAnts() {
 		if dropPheromone && (row >= 0 && row < GAME_SIZE && col >= 0 && col < GAME_SIZE) {
 			switch ant.state {
 			case FORAGE:
-				g.foragingPheromone.Insert(&Pheromone{Vector: &Vector{x: ant.x, y: ant.y}, amount: 1.0})
+				g.foragingPheromone.Insert(&Pheromone{Vector: &vec.Vector{X: ant.X, Y: ant.Y}, amount: 1.0})
 			case RETURN:
-				g.returningPheromone.Insert(&Pheromone{Vector: &Vector{x: ant.x, y: ant.y}, amount: 1.0})
+				g.returningPheromone.Insert(&Pheromone{Vector: &vec.Vector{X: ant.X, Y: ant.Y}, amount: 1.0})
 			}
 		}
 
@@ -217,53 +232,45 @@ func (g *Game) updateAnts() {
 
 func keepInbounds(ant *Ant, row int, col int) {
 	if row < 0 {
-		ant.dir.y = 1
+		ant.dir.Y = 1
 	}
 	if row >= GAME_SIZE {
-		ant.dir.y = -1
+		ant.dir.Y = -1
 	}
 	if col < 0 {
-		ant.dir.x = 1
+		ant.dir.X = 1
 	}
 	if col >= GAME_SIZE {
-		ant.dir.x = -1
+		ant.dir.X = -1
 	}
 }
 
 func (g *Game) updatePheromones() {
 	g.cachedForagingPheromoneCount = 0
-	for p := range g.foragingPheromone.Chan() {
+	for pher := range g.foragingPheromone.Chan() {
 		g.cachedForagingPheromoneCount++
-		pher := p.(*Pheromone)
 
 		pher.amount -= PHEROMONE_DECAY
 		if pher.amount <= 0 {
-			g.foragingPheromone.Remove(p)
+			g.foragingPheromone.Remove(pher)
 		}
 	}
 
 	g.cachedReturningPheromone = 0
-	for p := range g.returningPheromone.Chan() {
+	for pher := range g.returningPheromone.Chan() {
 		g.cachedReturningPheromone++
-		pher := p.(*Pheromone)
 
 		pher.amount -= PHEROMONE_DECAY
 		if pher.amount <= 0 {
-			g.returningPheromone.Remove(p)
+			g.returningPheromone.Remove(pher)
 		}
-	}
-
-	if g.tickCount%30 == 0 {
-		g.foragingPheromone.Balance()
-		g.returningPheromone.Balance()
 	}
 }
 
 func (g *Game) updateFood() {
 	g.cachedFood = 0
 
-	for f := range g.food.Chan() {
-		food := f.(*Food)
+	for food := range g.food.Chan() {
 		g.cachedFood += food.amount
 
 		if food.amount <= 0 {
