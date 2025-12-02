@@ -35,3 +35,6 @@ next steps
 trying to abstract away kdtree so we can plug and play
 - different kd tree impls
 - different spatial datastructures
+
+ok so spatial hashing is awesome...
+things are a bit tangled now though, would like to remove kdtree.Point everything except kd wrapper implementation

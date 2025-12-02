@@ -8,6 +8,7 @@ import (
 	vec "github.com/rafibayer/ants-again/vector"
 )
 
+// todo: time based things should be relative to TPS
 const (
 	GAME_SIZE = 1000
 
@@ -15,7 +16,7 @@ const (
 	ANT_FOOD_RADIUS = 5.0              // radius in which an ant will pick up food
 	ANT_HILL_RADIUS = GAME_SIZE / 30.0 // radius in which an ant will return to hill
 	ANT_ROTATION    = 11.0             // max rotation degrees in either direction per tick
-	ANT_BOUNDARY    = WRAP             // if true, ants will wrap around to the other side instead of turning at boundaries
+	ANT_BOUNDARY    = TURN             // if true, ants will wrap around to the other side instead of turning at boundaries
 
 	PHEROMONE_SENSE_RADIUS float64 = GAME_SIZE / 6.0     // radius in which an ant will smell pheromones
 	PHEROMONE_DECAY                = (1.0 / 60.0) / 15.0 // denominator is number of seconds until decay
@@ -169,8 +170,7 @@ func (g *Game) updateAnts() {
 		// randomly rotate a few degrees
 		ant.dir = ant.dir.Rotate(Rand(-ANT_ROTATION, ANT_ROTATION))
 
-		row, col := ant.ToGrid()
-		keepInbounds(ant, row, col)
+		keepInbounds(ant)
 
 		if rand.Float32() < PHEROMONE_SENSE_PROB {
 			// pheromone field to search based on ant state
@@ -235,7 +235,7 @@ func (g *Game) updateAnts() {
 
 		dropPheromone := rand.Float32() < PHEROMONE_DROP_PROB
 		// only drop pheromone if inbounds
-		if dropPheromone && (row >= 0 && row < GAME_SIZE && col >= 0 && col < GAME_SIZE) {
+		if dropPheromone {
 			switch ant.state {
 			case FORAGE:
 				g.foragingPheromone.Insert(&Pheromone{Vector: &vec.Vector{X: ant.X, Y: ant.Y}, amount: 1.0})
@@ -247,33 +247,33 @@ func (g *Game) updateAnts() {
 	}
 }
 
-func keepInbounds(ant *Ant, row int, col int) {
+func keepInbounds(ant *Ant) {
 	if ANT_BOUNDARY == WRAP {
-		if row < 0 {
+		if ant.Y < 0 {
 			ant.Y = GAME_SIZE
 		}
-		if row >= GAME_SIZE {
+		if ant.Y >= GAME_SIZE {
 			ant.Y = 0
 		}
-		if col < 0 {
+		if ant.X < 0 {
 			ant.X = GAME_SIZE
 		}
-		if col >= GAME_SIZE {
+		if ant.X >= GAME_SIZE {
 			ant.X = 0
 		}
 	}
 
 	if ANT_BOUNDARY == TURN {
-		if row < 0 {
+		if ant.Y < 0 {
 			ant.dir.Y = 1
 		}
-		if row >= GAME_SIZE {
+		if ant.Y >= GAME_SIZE {
 			ant.dir.Y = -1
 		}
-		if col < 0 {
+		if ant.X < 0 {
 			ant.dir.X = 1
 		}
-		if col >= GAME_SIZE {
+		if ant.X >= GAME_SIZE {
 			ant.dir.X = -1
 		}
 	}

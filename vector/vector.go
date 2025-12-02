@@ -2,8 +2,6 @@ package vec
 
 import (
 	"math"
-
-	"github.com/rafibayer/ants-again/kdtree"
 )
 
 var (
@@ -14,8 +12,6 @@ type Vector struct {
 	X, Y float64
 }
 
-var _ kdtree.Point = Vector{}
-
 func (p Vector) Dimension(i int) float64 {
 	// branchless, undefined behavior if 'i' not in {0, 1}
 	return p.X*float64(1-i) + p.Y*float64(i)
@@ -25,10 +21,14 @@ func (p Vector) Dimensions() int {
 	return 2
 }
 
-func (p Vector) Distance(other Vector) float64 {
+func (p Vector) Distance2(other Vector) float64 {
 	xDiff := p.X - other.X
 	yDiff := p.Y - other.Y
-	return math.Sqrt((xDiff * xDiff) + (yDiff * yDiff))
+	return (xDiff * xDiff) + (yDiff * yDiff)
+}
+
+func (p Vector) Distance(other Vector) float64 {
+	return math.Sqrt(p.Distance2(other))
 }
 
 func (p Vector) Add(other Vector) Vector {
@@ -66,11 +66,4 @@ func (v Vector) Rotate(deg float64) Vector {
 		X: v.X*cos - v.Y*sin,
 		Y: v.X*sin + v.Y*cos,
 	}
-}
-
-func (v Vector) ToGrid() (row, col int) {
-	row = int(math.Round(v.Y))
-	col = int(math.Round(v.X))
-
-	return row, col
 }
