@@ -39,48 +39,7 @@ func (g *Game) getCameraOpts() *ebiten.DrawImageOptions {
 }
 
 func drawScreenSpace(g *Game, screen *ebiten.Image) {
-	stats := struct {
-		fps string
-		tps string
-
-		ants struct {
-			foraging  int
-			returning int
-		}
-		food struct {
-			remaining int
-			collected int
-		}
-		remainingFood int
-		pheromone     struct {
-			forage   int
-			returing int
-		}
-	}{
-		fps: fmt.Sprintf("%.0f", ebiten.ActualFPS()),
-		tps: fmt.Sprintf("%.0f", ebiten.ActualTPS()),
-		ants: struct {
-			foraging  int
-			returning int
-		}{
-			foraging:  g.cachedForagingCount,
-			returning: g.cachedReturningCount,
-		},
-		food: struct {
-			remaining int
-			collected int
-		}{
-			remaining: g.cachedRemainingFood,
-			collected: g.collectedFood,
-		},
-		pheromone: struct {
-			forage   int
-			returing int
-		}{
-			forage:   g.cachedForagingPheromoneCount,
-			returing: g.cachedReturningPheromone,
-		},
-	}
+	stats := g.Stats()
 	ebitenutil.DebugPrint(screen, fmt.Sprintf("%+v", stats))
 }
 
