@@ -7,8 +7,9 @@ import (
 )
 
 type Stats struct {
-	fps string
-	tps string
+	ticks int
+	fps   string
+	tps   string
 
 	ants struct {
 		foraging  int
@@ -26,8 +27,9 @@ type Stats struct {
 
 func (g *Game) Stats() *Stats {
 	return &Stats{
-		fps: fmt.Sprintf("%.0f", ebiten.ActualFPS()),
-		tps: fmt.Sprintf("%.0f", ebiten.ActualTPS()),
+		ticks: g.tickCount,
+		fps:   fmt.Sprintf("%.0f", ebiten.ActualFPS()),
+		tps:   fmt.Sprintf("%.0f", ebiten.ActualTPS()),
 		ants: struct {
 			foraging  int
 			returning int
