@@ -95,13 +95,9 @@ type Game struct {
 	foragingPheromone  spatial.Spatial[*Pheromone]
 	returningPheromone spatial.Spatial[*Pheromone]
 
-	// cached spatial data structure sizes for stat reporting
-	// todo: spatial.Hash can track size in O(1), we could drop all this
-	cachedForagingCount          int
-	cachedReturningCount         int
-	cachedForagingPheromoneCount int
-	cachedReturningPheromone     int
-	cachedRemainingFood          int
+	foragingAntCount   int
+	returningAntCount  int
+	remainingFoodCount int
 }
 
 func NewGame(params *Params) *Game {
@@ -180,8 +176,8 @@ func (g *Game) Update() error {
 }
 
 func (g *Game) updateAnts() {
-	g.cachedForagingCount = 0
-	g.cachedReturningCount = 0
+	g.foragingAntCount = 0
+	g.returningAntCount = 0
 
 	// update each ant, add to next and state
 	for _, ant := range g.ants {
@@ -221,8 +217,7 @@ func (g *Game) updateAnts() {
 		}
 
 		if ant.state == FORAGE {
-			g.cachedForagingCount++
-
+			g.foragingAntCount++
 			// check for food nearby, change state and turn around
 			nearFood := g.food.RadialSearch(ant.Vector, ANT_FOOD_RADIUS)
 
@@ -237,8 +232,7 @@ func (g *Game) updateAnts() {
 		}
 
 		if ant.state == RETURN {
-			g.cachedReturningCount++
-
+			g.returningAntCount++
 			nearHill := g.hills.RadialSearch(ant.Vector, ANT_HILL_RADIUS)
 			// check for hill nearby, change state and turn around
 			if len(nearHill) > 0 {
@@ -295,11 +289,8 @@ func keepInbounds(ant *Ant) {
 }
 
 func (g *Game) updatePheromones() {
-	g.cachedForagingPheromoneCount = 0
 	toRemove := make([]*Pheromone, 0)
 	for pher := range g.foragingPheromone.Chan() {
-		g.cachedForagingPheromoneCount++
-
 		pher.amount -= g.params.PheromoneDecay
 		if pher.amount <= 0 {
 			toRemove = append(toRemove, pher)
@@ -310,11 +301,8 @@ func (g *Game) updatePheromones() {
 		g.foragingPheromone.Remove(r)
 	}
 
-	g.cachedReturningPheromone = 0
 	toRemove = make([]*Pheromone, 0)
 	for pher := range g.returningPheromone.Chan() {
-		g.cachedReturningPheromone++
-
 		pher.amount -= g.params.PheromoneDecay
 		if pher.amount <= 0 {
 			toRemove = append(toRemove, pher)
@@ -327,12 +315,11 @@ func (g *Game) updatePheromones() {
 }
 
 func (g *Game) updateFood() {
-	g.cachedRemainingFood = 0
-
+	g.remainingFoodCount = 0
 	for food := range g.food.Chan() {
-		g.cachedRemainingFood += food.amount
-
+		g.remainingFoodCount += food.amount
 		if food.amount <= 0 {
+			// todo: remove while iterating panic risk
 			g.food.Remove(food)
 		}
 	}

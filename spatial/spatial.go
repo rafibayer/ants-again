@@ -12,4 +12,5 @@ type Spatial[T vector.Point] interface {
 	Chan() chan T
 	Remove(p T) T
 	RadialSearch(center vector.Point, radius float64) []T
+	Len() int
 }

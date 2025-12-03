@@ -11,6 +11,7 @@ type hashKey struct {
 }
 
 type Hash[T vector.Point] struct {
+	len   int
 	size  float64
 	cells map[hashKey][]T
 }
@@ -50,6 +51,7 @@ func (h *Hash[T]) Chan() chan T {
 func (h *Hash[T]) Insert(p T) {
 	k := h.key(p)
 	h.cells[k] = append(h.cells[k], p)
+	h.len++
 }
 
 func (h *Hash[T]) Points() []T {
@@ -137,10 +139,16 @@ func (h *Hash[T]) Remove(p T) T {
 		return zero
 	}
 
+	h.len--
+
 	// swap with last and truncate
 	deleted := h.cells[k][index]
 	h.cells[k][index] = h.cells[k][len(h.cells[k])-1]
 	h.cells[k] = h.cells[k][:len(h.cells[k])-1]
 
 	return deleted
+}
+
+func (h *Hash[T]) Len() int {
+	return h.len
 }

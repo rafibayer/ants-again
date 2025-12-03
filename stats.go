@@ -32,22 +32,22 @@ func (g *Game) Stats() *Stats {
 			foraging  int
 			returning int
 		}{
-			foraging:  g.cachedForagingCount,
-			returning: g.cachedReturningCount,
+			foraging:  g.foragingAntCount,
+			returning: g.returningAntCount,
 		},
 		food: struct {
 			left      int
 			collected int
 		}{
-			left:      g.cachedRemainingFood,
+			left:      g.remainingFoodCount,
 			collected: g.collectedFood,
 		},
 		pheromone: struct {
 			forage   int
 			returing int
 		}{
-			forage:   g.cachedForagingPheromoneCount,
-			returing: g.cachedReturningPheromone,
+			forage:   g.foragingPheromone.Len(),
+			returing: g.foragingPheromone.Len(),
 		},
 	}
 }
