@@ -1,8 +1,6 @@
 package main
 
 import (
-	"math/rand/v2"
-
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/rafibayer/ants-again/spatial"
 	"github.com/rafibayer/ants-again/vector"
@@ -14,22 +12,32 @@ const (
 	TPS       = 60
 	GAME_SIZE = 1000
 
-	ANT_SPEED       = 2.5
-	ANT_FOOD_RADIUS = 5.0              // radius in which an ant will pick up food
-	ANT_HILL_RADIUS = GAME_SIZE / 30.0 // radius in which an ant will return to hill
-	ANT_ROTATION    = 9.0              // max rotation degrees in either direction per tick
-	ANT_BOUNDARY    = TURN             // if true, ants will wrap around to the other side instead of turning at boundaries
-
-	PHEROMONE_SENSE_RADIUS float64 = GAME_SIZE / 6.0     // radius in which an ant will smell pheromones
-	PHEROMONE_DECAY                = (1.0 / 60.0) / 15.0 // denominator is number of seconds until decay
-	PHEROMONE_DROP_PROB            = 1.0 / 120.0         // odds of dropping a pheromone per tick
-
-	// we can tune perf with these, less sensing, but with more effect to reduce kdtree searches
-	PHEROMONE_INFLUENCE  = 2.0       // increase or decrease effect of pheromone on direction
-	PHEROMONE_SENSE_PROB = 1.0 / 5.0 // odds of smelling for pheromones per tick
+	ANT_FOOD_RADIUS = GAME_SIZE / 200.0 // radius in which an ant will pick up food
+	ANT_HILL_RADIUS = GAME_SIZE / 30.0  // radius in which an ant will return to hill
+	ANT_BOUNDARY    = TURN              // if true, ants will wrap around to the other side instead of turning at boundaries
 
 	FOOD_START = 50
 )
+
+type Params struct {
+	AntSpeed             float64 // 2.5
+	AntRotation          float64 // 9.0
+	PheromoneSenseRadius float64 // 166.67 = (game_size / 6.0)
+	PheromoneDecay       float32 // 0.001111 = (1.0 / TPS) / 15.0
+	PheromoneDropProb    float64 // 0.008333 = 1.0 / (2 * TPS)
+	PheromoneInfluence   float64 // 2.0
+	PheromoneSenseProb   float64 // 1.0 / 5.0
+}
+
+var DefaultParams = Params{
+	AntSpeed:             2.5,
+	AntRotation:          9.0,
+	PheromoneSenseRadius: 166.67,   //  = (game_size / 6.0)
+	PheromoneDecay:       0.001111, //  = (1.0 / TPS) / 15.0
+	PheromoneDropProb:    0.008333, //  = 1.0 / (2 * TPS)
+	PheromoneInfluence:   2.0,
+	PheromoneSenseProb:   1.0 / 5.0,
+}
 
 type Food struct {
 	// Position
@@ -68,6 +76,8 @@ type Pheromone struct {
 }
 
 type Game struct {
+	params *Params
+
 	frameCount, tickCount int
 
 	camX, camY float64
@@ -94,7 +104,11 @@ type Game struct {
 	cachedRemainingFood          int
 }
 
-func NewGame() *Game {
+func NewGame(params *Params) *Game {
+	if params == nil {
+		params = &DefaultParams
+	}
+
 	ants := []*Ant{}
 	food := spatial.NewHash[*Food](GAME_SIZE / 100.0)
 	hills := spatial.NewHash[vector.Vector](GAME_SIZE / 5.0)
@@ -132,6 +146,7 @@ func NewGame() *Game {
 	hills.Insert(vector.Vector{X: GAME_SIZE / 2, Y: GAME_SIZE / 2})
 
 	return &Game{
+		params:     params,
 		frameCount: 0,
 		tickCount:  0,
 
@@ -170,14 +185,14 @@ func (g *Game) updateAnts() {
 
 	// update each ant, add to next and state
 	for _, ant := range g.ants {
-		ant.Vector = ant.Add(ant.dir.Normalize().Mul(ANT_SPEED))
+		ant.Vector = ant.Add(ant.dir.Normalize().Mul(float64(g.params.AntSpeed)))
 
 		// randomly rotate a few degrees
-		ant.dir = ant.dir.Rotate(Rand(-ANT_ROTATION, ANT_ROTATION))
+		ant.dir = ant.dir.Rotate(Rand(-g.params.AntRotation, g.params.AntRotation))
 
 		keepInbounds(ant)
 
-		if rand.Float32() < PHEROMONE_SENSE_PROB {
+		if Chance(g.params.PheromoneSenseProb) {
 			// pheromone field to search based on ant state
 			pheromone := g.returningPheromone
 			if ant.state == RETURN {
@@ -187,7 +202,7 @@ func (g *Game) updateAnts() {
 			// influence direction based on pheromone
 			pheromoneDir := vector.ZERO
 
-			nearby := pheromone.RadialSearch(ant.Vector, PHEROMONE_SENSE_RADIUS)
+			nearby := pheromone.RadialSearch(ant.Vector, g.params.PheromoneSenseRadius)
 
 			for _, pher := range nearby {
 				// direction to pheromone and signal strength
@@ -201,7 +216,7 @@ func (g *Game) updateAnts() {
 				pheromoneDir = pheromoneDir.Add(dirToSpot.Mul(strength))
 			}
 
-			ant.dir = ant.dir.Add(pheromoneDir.Mul(PHEROMONE_INFLUENCE))
+			ant.dir = ant.dir.Add(pheromoneDir.Mul(g.params.PheromoneInfluence))
 			ant.dir = ant.dir.Normalize()
 		}
 
@@ -234,11 +249,10 @@ func (g *Game) updateAnts() {
 			}
 		}
 
-		dropPheromone := rand.Float32() < PHEROMONE_DROP_PROB
-		// only drop pheromone if inbounds
-		if dropPheromone {
+		if Chance(g.params.PheromoneDropProb) {
 			switch ant.state {
 			case FORAGE:
+				// todo: copy ant vector instead of realloc?
 				g.foragingPheromone.Insert(&Pheromone{Vector: &vector.Vector{X: ant.X, Y: ant.Y}, amount: 1.0})
 			case RETURN:
 				g.returningPheromone.Insert(&Pheromone{Vector: &vector.Vector{X: ant.X, Y: ant.Y}, amount: 1.0})
@@ -286,7 +300,7 @@ func (g *Game) updatePheromones() {
 	for pher := range g.foragingPheromone.Chan() {
 		g.cachedForagingPheromoneCount++
 
-		pher.amount -= PHEROMONE_DECAY
+		pher.amount -= g.params.PheromoneDecay
 		if pher.amount <= 0 {
 			toRemove = append(toRemove, pher)
 		}
@@ -301,7 +315,7 @@ func (g *Game) updatePheromones() {
 	for pher := range g.returningPheromone.Chan() {
 		g.cachedReturningPheromone++
 
-		pher.amount -= PHEROMONE_DECAY
+		pher.amount -= g.params.PheromoneDecay
 		if pher.amount <= 0 {
 			toRemove = append(toRemove, pher)
 		}

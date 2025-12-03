@@ -20,7 +20,7 @@ func main() {
 		f.Close()
 	}()
 
-	game := NewGame()
+	game := NewGame(nil)
 
 	ebiten.SetTPS(TPS)
 

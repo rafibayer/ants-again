@@ -7,6 +7,10 @@ func LinearRemap(x float64) float64 {
 	return (x + 1) * 0.5
 }
 
+func Chance(odds float64) bool {
+	return rand.Float64() < odds
+}
+
 func Rand(min, max float64) float64 {
 	return min + rand.Float64()*(max-min)
 }
