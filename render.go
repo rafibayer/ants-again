@@ -80,14 +80,14 @@ func (g *Game) drawAnts() {
 }
 
 func (g *Game) drawFood() {
-	for food := range g.food.Chan() {
+	for food := range g.food.PointsIter() {
 		c := Fade(BROWN, float32(food.amount/FOOD_START))
 		vector.FillRect(g.world, float32(food.X), float32(food.Y), 1.5, 1.5, c, false)
 	}
 }
 
 func (g *Game) drawHills() {
-	for hill := range g.hills.Chan() {
+	for hill := range g.hills.PointsIter() {
 		vector.FillCircle(g.world, float32(hill.X), float32(hill.Y), ANT_HILL_RADIUS, WHITE, false)
 	}
 }
@@ -99,7 +99,7 @@ func (g *Game) drawPheromones() {
 	}
 
 	writePheromones := func(ph spatial.Spatial[*Pheromone], color color.RGBA) {
-		for pher := range ph.Chan() {
+		for pher := range ph.PointsIter() {
 			// Fade color by pheromone amount (0..1)
 			c := Fade(color, pher.amount)
 
@@ -125,12 +125,12 @@ func (g *Game) drawPheromones() {
 }
 
 func (g *Game) naiveDrawPheromones() {
-	for pher := range g.foragingPheromone.Chan() {
+	for pher := range g.foragingPheromone.PointsIter() {
 		c := Fade(DARK_GREEN, pher.amount)
 		vector.FillRect(g.world, float32(pher.X), float32(pher.Y), 3.0, 3.0, c, false)
 	}
 
-	for pher := range g.returningPheromone.Chan() {
+	for pher := range g.returningPheromone.PointsIter() {
 		c := Fade(DARK_LILAC, pher.amount)
 		vector.FillRect(g.world, float32(pher.X), float32(pher.Y), 3.0, 3.0, c, false)
 	}

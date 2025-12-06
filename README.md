@@ -5,6 +5,8 @@ other sims
 
 go tool pprof cpu.prof
 go tool pprof -dot cpu.prof > cpu.dot
+go tool pprof -dot mem.prof > mem.dot
+
 
 depending on params, seeing 1 of 2 familiar problems
 - either, the ants don't care enough about the path, and they wander forever
@@ -43,3 +45,20 @@ trying to abstract away kdtree so we can plug and play
 
 ok so spatial hashing is awesome...
 things are a bit tangled now though, would like to remove kdtree.Point everything except kd wrapper implementation
+
+after a few minutes, the "gym" produced:
+params := Params{AntSpeed: 4.004083786014876, AntRotation: 19.577112276772198, PheromoneSenseRadius: 145.02980311888592, PheromoneDecay: 0.0359234, PheromoneDropProb: 0.278618588611103, PheromoneInfluence: 6.8941542247347485, PheromoneSenseProb: 0.46472625874412476}
+
+which is super interesting... fast ants, pheromone decays very fast. Ants converge quickly, and then break out and scatter for before repeating.
+
+Observed a few times that they would form a ring of mostly the same state, slowly tighten, and then explode outward when they reached the center
+
+![alt text](image.png)
+![alt text](image-1.png)
+
+which was then beaten minutes later by 
+{AntSpeed:1.1074422968310311 AntRotation:1.5449212668986223 PheromoneSenseRadius:144.77348189322214 PheromoneDecay:0.05122324 PheromoneDropProb:0.2518914151215831 PheromoneInfluence:2.600420296690782 PheromoneSenseProb:0.26713126919182}
+
+with very slow ants, with fairly conservative pheromone sensing.
+
+There probably is a big luck element here, maybe it would make sense to take the median of N samples as the score for each iteration

@@ -32,10 +32,10 @@ type Params struct {
 var DefaultParams = Params{
 	AntSpeed:             2.5,
 	AntRotation:          9.0,
-	PheromoneSenseRadius: 166.67,   //  = (game_size / 6.0)
-	PheromoneDecay:       0.001111, //  = (1.0 / TPS) / 15.0
-	PheromoneDropProb:    0.008333, //  = 1.0 / (2 * TPS)
-	PheromoneInfluence:   2.0,
+	PheromoneSenseRadius: GAME_SIZE / 6,
+	PheromoneDecay:       (1.0 / TPS) / 15.0,
+	PheromoneDropProb:    1.0 / (2 * TPS),
+	PheromoneInfluence:   2,
 	PheromoneSenseProb:   1.0 / 5.0,
 }
 
@@ -198,9 +198,9 @@ func (g *Game) updateAnts() {
 			// influence direction based on pheromone
 			pheromoneDir := vector.ZERO
 
-			nearby := pheromone.RadialSearch(ant.Vector, g.params.PheromoneSenseRadius)
+			nearby := pheromone.RadialSearchIter(ant.Vector, g.params.PheromoneSenseRadius)
 
-			for _, pher := range nearby {
+			for pher := range nearby {
 				// direction to pheromone and signal strength
 				dirToSpot := pher.Sub(ant.Vector).Normalize()
 
@@ -219,9 +219,9 @@ func (g *Game) updateAnts() {
 		if ant.state == FORAGE {
 			g.foragingAntCount++
 			// check for food nearby, change state and turn around
-			nearFood := g.food.RadialSearch(ant.Vector, ANT_FOOD_RADIUS)
+			nearFood := g.food.RadialSearchIter(ant.Vector, ANT_FOOD_RADIUS)
 
-			for _, food := range nearFood {
+			for food := range nearFood {
 				if food.amount > 0 {
 					food.amount--
 					ant.state = RETURN
@@ -233,13 +233,15 @@ func (g *Game) updateAnts() {
 
 		if ant.state == RETURN {
 			g.returningAntCount++
-			nearHill := g.hills.RadialSearch(ant.Vector, ANT_HILL_RADIUS)
+			nearHill := g.hills.RadialSearchIter(ant.Vector, ANT_HILL_RADIUS)
+
 			// check for hill nearby, change state and turn around
-			if len(nearHill) > 0 {
+			for range nearHill {
 				// turn around and go back to foraging
 				ant.state = FORAGE
 				g.collectedFood++
 				ant.dir = ant.dir.Mul(-1.0)
+				break
 			}
 		}
 
@@ -290,7 +292,7 @@ func keepInbounds(ant *Ant) {
 
 func (g *Game) updatePheromones() {
 	toRemove := make([]*Pheromone, 0)
-	for pher := range g.foragingPheromone.Chan() {
+	for pher := range g.foragingPheromone.PointsIter() {
 		pher.amount -= g.params.PheromoneDecay
 		if pher.amount <= 0 {
 			toRemove = append(toRemove, pher)
@@ -302,7 +304,7 @@ func (g *Game) updatePheromones() {
 	}
 
 	toRemove = make([]*Pheromone, 0)
-	for pher := range g.returningPheromone.Chan() {
+	for pher := range g.returningPheromone.PointsIter() {
 		pher.amount -= g.params.PheromoneDecay
 		if pher.amount <= 0 {
 			toRemove = append(toRemove, pher)
@@ -316,7 +318,7 @@ func (g *Game) updatePheromones() {
 
 func (g *Game) updateFood() {
 	g.remainingFoodCount = 0
-	for food := range g.food.Chan() {
+	for food := range g.food.PointsIter() {
 		g.remainingFoodCount += food.amount
 		if food.amount <= 0 {
 			// todo: remove while iterating panic risk
