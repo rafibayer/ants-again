@@ -2,6 +2,8 @@ package vector
 
 import (
 	"math"
+
+	"github.com/rafibayer/ants-again/util"
 )
 
 var (
@@ -46,6 +48,15 @@ func (p Vector) Mul(v float64) Vector {
 func (p Vector) CosineSimilarity(other Vector) float64 {
 	dot := p.X*other.X + p.Y*other.Y
 	return dot / (p.Magnitude() * other.Magnitude())
+}
+
+func (p Vector) AngleBetween(other Vector) float64 {
+	dot := p.X*other.X + p.Y*other.Y
+
+	cosTheta := dot / (p.Magnitude() * other.Magnitude())
+	cosTheta = util.Clamp(-1, cosTheta, 1)
+
+	return math.Acos(cosTheta) * 180 / math.Pi
 }
 
 func (v Vector) Rotate(deg float64) Vector {

@@ -37,8 +37,6 @@ func main() {
 			}
 
 			var params *Params
-			// params := &Params{AntSpeed: 4.028117099680873, AntRotation: 12.956447356432879, PheromoneSenseRadius: 122.17592076424361, PheromoneDecay: 0.0744294, PheromoneDropProb: 0.9680050413309523, PheromoneInfluence: 4.414979771373723, PheromoneSenseProb: 0.8808800814965941}
-
 			game := NewGame(params)
 			ebiten.SetWindowSize(800, 600)
 			ebiten.SetWindowTitle("Hello, World!")

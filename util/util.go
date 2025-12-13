@@ -1,4 +1,4 @@
-package main
+package util
 
 import "math/rand/v2"
 
@@ -13,6 +13,17 @@ func Chance(odds float64) bool {
 
 func Rand(min, max float64) float64 {
 	return min + rand.Float64()*(max-min)
+}
+
+func Clamp(low, x, high float64) float64 {
+	if x < low {
+		return low
+	}
+	if x > high {
+		return high
+	}
+
+	return x
 }
 
 func Ptr[T any](t T) *T {

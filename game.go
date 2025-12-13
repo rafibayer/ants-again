@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/rafibayer/ants-again/spatial"
+	"github.com/rafibayer/ants-again/util"
 	"github.com/rafibayer/ants-again/vector"
 )
 
@@ -20,23 +21,28 @@ const (
 )
 
 type Params struct {
-	AntSpeed             float64 // 2.5
-	AntRotation          float64 // 9.0
-	PheromoneSenseRadius float64 // 166.67 = (game_size / 6.0)
-	PheromoneDecay       float32 // 0.001111 = (1.0 / TPS) / 15.0
-	PheromoneDropProb    float64 // 0.008333 = 1.0 / (2 * TPS)
-	PheromoneInfluence   float64 // 2.0
-	PheromoneSenseProb   float64 // 1.0 / 5.0
+	AntSpeed          float64 // 2.5
+	AntRotation       float64 // 9.0
+	AntPheromoneStart int     // 30
+
+	PheromoneSenseRadius           float64 // 166.67 = (game_size / 6.0)
+	PheromoneSenseCosineSimilarity float64 // 0.33
+	PheromoneDecay                 float32 // 0.001111 = (1.0 / TPS) / 15.0
+	PheromoneDropProb              float64 // 0.008333 = 1.0 / (2 * TPS)
+	PheromoneInfluence             float64 // 2.0
+	PheromoneSenseProb             float64 // 1.0 / 5.0
 }
 
 var DefaultParams = Params{
-	AntSpeed:             2.5,
-	AntRotation:          9.0,
-	PheromoneSenseRadius: GAME_SIZE / 6,
-	PheromoneDecay:       (1.0 / TPS) / 15.0,
-	PheromoneDropProb:    1.0 / (2 * TPS),
-	PheromoneInfluence:   2,
-	PheromoneSenseProb:   1.0 / 5.0,
+	AntSpeed:                       2.5,
+	AntRotation:                    9.0,
+	AntPheromoneStart:              15,
+	PheromoneSenseRadius:           GAME_SIZE / 15.0,
+	PheromoneSenseCosineSimilarity: 0.33,
+	PheromoneDecay:                 1.0 / (10 * TPS),
+	PheromoneDropProb:              1.0 / (TPS),
+	PheromoneInfluence:             1.0,
+	PheromoneSenseProb:             1.0 / 2.5,
 }
 
 type Food struct {
@@ -59,6 +65,8 @@ type Ant struct {
 
 	dir   vector.Vector
 	state AntState
+
+	pheromoneStored int
 }
 
 type BoundaryBehavior int
@@ -111,9 +119,10 @@ func NewGame(params *Params) *Game {
 
 	for range 1000 {
 		ants = append(ants, &Ant{
-			Vector: vector.Vector{X: GAME_SIZE / 2, Y: GAME_SIZE / 2},
-			dir:    vector.Vector{X: Rand(-1, 1), Y: Rand(-1, 1)},
-			state:  FORAGE,
+			Vector:          vector.Vector{X: GAME_SIZE / 2, Y: GAME_SIZE / 2},
+			dir:             vector.Vector{X: util.Rand(-1, 1), Y: util.Rand(-1, 1)},
+			state:           FORAGE,
+			pheromoneStored: params.AntPheromoneStart,
 		})
 	}
 
@@ -146,9 +155,9 @@ func NewGame(params *Params) *Game {
 		frameCount: 0,
 		tickCount:  0,
 
-		camX: 0,
-		camY: 0,
-		zoom: 1.0,
+		camX: 100,
+		camY: 150,
+		zoom: 0.5,
 
 		world: ebiten.NewImage(GAME_SIZE, GAME_SIZE),
 		px:    make([]byte, GAME_SIZE*GAME_SIZE*4), // pheromone buffer: 4 bytes per pixel (R,G,B,A)
@@ -157,7 +166,7 @@ func NewGame(params *Params) *Game {
 		food:  food,
 		hills: hills,
 
-		// spatial hash size his a fairly import perf knob -- if these are mis-sized,
+		// spatial hash size his a fairly import perf knob -- if these are missized,
 		// the cells get too crowded, or we have to search too many of them
 		foragingPheromone:  spatial.NewHash[*Pheromone](GAME_SIZE / 20),
 		returningPheromone: spatial.NewHash[*Pheromone](GAME_SIZE / 20),
@@ -165,7 +174,6 @@ func NewGame(params *Params) *Game {
 }
 
 func (g *Game) Update() error {
-
 	g.pollInput()
 	g.updateAnts()
 	g.updatePheromones()
@@ -183,12 +191,9 @@ func (g *Game) updateAnts() {
 	for _, ant := range g.ants {
 		ant.Vector = ant.Add(ant.dir.Normalize().Mul(float64(g.params.AntSpeed)))
 
-		// randomly rotate a few degrees
-		ant.dir = ant.dir.Rotate(Rand(-g.params.AntRotation, g.params.AntRotation))
-
 		keepInbounds(ant)
 
-		if Chance(g.params.PheromoneSenseProb) {
+		if util.Chance(g.params.PheromoneSenseProb) {
 			// pheromone field to search based on ant state
 			pheromone := g.returningPheromone
 			if ant.state == RETURN {
@@ -206,8 +211,13 @@ func (g *Game) updateAnts() {
 
 				// scale by weight, distance to ant, and angular similarity
 				strength := float64(pher.amount)
-				strength = strength / max(0.2, ant.Vector.Distance(*pher.Vector)) // prevent overweighting really close smells
-				strength *= max(ant.dir.CosineSimilarity(dirToSpot), 0)           // LinearRemap(ant.dir.CosineSimilarity(dirToSpot))      // discount dissimilar angles
+				strength = strength / max(0.1, ant.Vector.Distance(*pher.Vector)) // prevent overweighting really close smells
+
+				cosineSim := ant.dir.CosineSimilarity(dirToSpot)
+				if cosineSim < g.params.PheromoneSenseCosineSimilarity {
+					strength *= 0
+				}
+				strength *= cosineSim
 
 				pheromoneDir = pheromoneDir.Add(dirToSpot.Mul(strength))
 			}
@@ -223,9 +233,10 @@ func (g *Game) updateAnts() {
 
 			for food := range nearFood {
 				if food.amount > 0 {
-					food.amount--
 					ant.state = RETURN
+					food.amount--
 					ant.dir = ant.dir.Mul(-1.0)
+					ant.pheromoneStored = g.params.AntPheromoneStart
 					break // only grab 1 food
 				}
 			}
@@ -241,20 +252,23 @@ func (g *Game) updateAnts() {
 				ant.state = FORAGE
 				g.collectedFood++
 				ant.dir = ant.dir.Mul(-1.0)
+				ant.pheromoneStored = g.params.AntPheromoneStart
 				break
 			}
 		}
 
-		if Chance(g.params.PheromoneDropProb) {
+		if ant.pheromoneStored > 0 && util.Chance(g.params.PheromoneDropProb) {
+			ant.pheromoneStored--
 			switch ant.state {
 			case FORAGE:
-				// todo: copy ant vector instead of realloc?
 				g.foragingPheromone.Insert(&Pheromone{Vector: &vector.Vector{X: ant.X, Y: ant.Y}, amount: 1.0})
 			case RETURN:
 				g.returningPheromone.Insert(&Pheromone{Vector: &vector.Vector{X: ant.X, Y: ant.Y}, amount: 1.0})
 			}
 		}
 
+		// randomly rotate a few degrees
+		ant.dir = ant.dir.Rotate(util.Rand(-g.params.AntRotation, g.params.AntRotation))
 	}
 }
 
@@ -318,12 +332,17 @@ func (g *Game) updatePheromones() {
 
 func (g *Game) updateFood() {
 	g.remainingFoodCount = 0
+
+	toRemove := make([]*Food, 0)
 	for food := range g.food.PointsIter() {
 		g.remainingFoodCount += food.amount
 		if food.amount <= 0 {
-			// todo: remove while iterating panic risk
-			g.food.Remove(food)
+			toRemove = append(toRemove, food)
 		}
+	}
+
+	for _, r := range toRemove {
+		g.food.Remove(r)
 	}
 }
 

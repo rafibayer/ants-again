@@ -69,7 +69,7 @@ func (h *Hash[T]) RadialSearch(center vector.Point, radius float64) []T {
 	return result
 }
 
-// todo: lazy
+// todo: dedup with RadialSearch
 func (h *Hash[T]) RadialSearchIter(center vector.Point, radius float64) iter.Seq[T] {
 	return func(yield func(T) bool) {
 		// 1. Determine the center cell and search bounds

@@ -6,65 +6,90 @@ package main
 import (
 	"log"
 	"slices"
+
+	"github.com/rafibayer/ants-again/util"
 )
 
 const (
-	// run for 1 simulated minutes
+	// run for 1 simulated minute
 	GYM_SIM_TIME = 60 * TPS
 	GYM_SAMPLES  = 4
+
+	// concurrency controls
+	GYM_PARAM_WORKERS  = 4 // how many different Params evaluated at once
+	GYM_SAMPLE_WORKERS = 4 // how many samples per Params run concurrently
 )
 
 func runGym() error {
+	type result struct {
+		iteration int
+		params    Params
+		scores    []int
+		stats     []Stats
+		median    int
+		medianSt  Stats
+	}
+
+	jobs := make(chan int)
+	results := make(chan result)
+
+	// --- param workers ---
+	for w := 0; w < GYM_PARAM_WORKERS; w++ {
+		go func() {
+			for iteration := range jobs {
+				params := Params{
+					AntSpeed:             util.Rand(0.5, 2.5),
+					AntRotation:          util.Rand(0.0, 20.0),
+					PheromoneSenseRadius: util.Rand(GAME_SIZE/50, GAME_SIZE/4),
+					PheromoneDecay:       float32(util.Rand(1/120.0, 1/1.0)),
+					PheromoneDropProb:    util.Rand(1/180.0, 1/1.0),
+					PheromoneInfluence:   util.Rand(0.1, 10.0),
+					PheromoneSenseProb:   util.Rand(0.05, 1.0),
+				}
+
+				scores, stats := runSamples(params)
+				median, medianSt := medianSample(scores, stats)
+
+				results <- result{
+					iteration: iteration,
+					params:    params,
+					scores:    scores,
+					stats:     stats,
+					median:    median,
+					medianSt:  medianSt,
+				}
+			}
+		}()
+	}
+
 	var bestCollected int
 	var bestParams Params
 	var bestStats Stats
 
 	defer func() {
-		log.Printf("best: %d food collected\nparams: %+v\nstats: %+v",
-			bestCollected, bestParams, bestStats)
+		log.Printf(
+			"best: %d food collected\nparams: %+v\nstats: %+v",
+			bestCollected, bestParams, bestStats,
+		)
 	}()
 
-	for iteration := 0; true; iteration++ {
-
-		log.Printf("====== [%d] ======", iteration)
-
-		params := Params{
-			AntSpeed:             Rand(0.5, 7.0),
-			AntRotation:          Rand(0.0, 20.0),
-			PheromoneSenseRadius: Rand(GAME_SIZE/50, GAME_SIZE/4),
-			PheromoneDecay:       float32(Rand(1/120.0, 1/1.0)),
-			PheromoneDropProb:    Rand(1/120.0, 1/1.0),
-			PheromoneInfluence:   Rand(0.1, 10.0),
-			PheromoneSenseProb:   Rand(0.05, 1.0),
+	// feed iterations
+	go func() {
+		for i := 0; ; i++ {
+			jobs <- i
 		}
+	}()
 
-		scores := make([]int, 0, GYM_SAMPLES)
-		statsList := make([]Stats, 0, GYM_SAMPLES)
+	// collect results (single goroutine owns best state)
+	for res := range results {
+		if res.median > bestCollected {
+			bestCollected = res.median
+			bestParams = res.params
+			bestStats = res.medianSt
 
-		for range GYM_SAMPLES {
-			game := NewGame(nil)
-			for range GYM_SIM_TIME {
-				if err := game.Update(); err != nil {
-					log.Printf("[%d] error: %v\nparams: %+v", iteration, err, params)
-				}
-			}
-
-			st := game.Stats()
-			scores = append(scores, st.food.collected)
-			statsList = append(statsList, *st)
-		}
-
-		medianScore, medianStats := medianSample(scores, statsList)
-
-		if medianScore > bestCollected {
-			bestCollected = medianScore
-			bestParams = params
-			bestStats = medianStats
-
-			// compute min and max only for best-case iterations
-			minScore := scores[0]
-			maxScore := scores[0]
-			for _, sc := range scores[1:] {
+			minScore := res.scores[0]
+			maxScore := res.scores[0]
+			for _, sc := range res.scores[1:] {
 				if sc < minScore {
 					minScore = sc
 				}
@@ -73,15 +98,65 @@ func runGym() error {
 				}
 			}
 
-			log.Printf("[%d] New Best: %d", iteration, medianScore)
+			log.Printf("[%d] New Best: %d", res.iteration, res.median)
 			log.Printf("[%d] Scores: min=%d median=%d max=%d",
-				iteration, minScore, medianScore, maxScore)
-			log.Printf("Params: %+v", params)
-			log.Printf("Stats (median sample): %+v", medianStats)
+				res.iteration, minScore, res.median, maxScore)
+			log.Printf("Params: %+v", res.params)
+			log.Printf("Stats (median sample): %+v", res.medianSt)
 		}
 	}
 
 	return nil
+}
+
+func runSamples(params Params) ([]int, []Stats) {
+	type sampleResult struct {
+		score int
+		stats Stats
+	}
+
+	work := make(chan struct{})
+	out := make(chan sampleResult)
+
+	// sample workers
+	for w := 0; w < GYM_SAMPLE_WORKERS; w++ {
+		go func() {
+			for range work {
+				game := NewGame(&params)
+
+				for range GYM_SIM_TIME {
+					if err := game.Update(); err != nil {
+						log.Printf("error: %v\nparams: %+v", err, params)
+					}
+				}
+
+				st := game.Stats()
+				out <- sampleResult{
+					score: st.food.collected,
+					stats: *st,
+				}
+			}
+		}()
+	}
+
+	// enqueue samples
+	go func() {
+		for i := 0; i < GYM_SAMPLES; i++ {
+			work <- struct{}{}
+		}
+		close(work)
+	}()
+
+	scores := make([]int, 0, GYM_SAMPLES)
+	stats := make([]Stats, 0, GYM_SAMPLES)
+
+	for i := 0; i < GYM_SAMPLES; i++ {
+		r := <-out
+		scores = append(scores, r.score)
+		stats = append(stats, r.stats)
+	}
+
+	return scores, stats
 }
 
 // medianSample returns the median score and the Stats belonging to

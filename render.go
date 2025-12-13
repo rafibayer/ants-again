@@ -17,8 +17,8 @@ const (
 )
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	screen.Clear()
-	g.world.Clear()
+	// screen.Clear()
+	// g.world.Clear()
 
 	drawScreenSpace(g, screen)
 	drawWorldSpace(g)

@@ -49,7 +49,7 @@ func (g *Game) Stats() *Stats {
 			returing int
 		}{
 			forage:   g.foragingPheromone.Len(),
-			returing: g.foragingPheromone.Len(),
+			returing: g.returningPheromone.Len(),
 		},
 	}
 }
