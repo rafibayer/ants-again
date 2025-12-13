@@ -34,15 +34,15 @@ type Params struct {
 }
 
 var DefaultParams = Params{
-	AntSpeed:                       2.5,
+	AntSpeed:                       1.8,
 	AntRotation:                    9.0,
-	AntPheromoneStart:              15,
-	PheromoneSenseRadius:           GAME_SIZE / 15.0,
+	AntPheromoneStart:              20,
+	PheromoneSenseRadius:           GAME_SIZE / 10.0,
 	PheromoneSenseCosineSimilarity: 0.33,
 	PheromoneDecay:                 1.0 / (10 * TPS),
 	PheromoneDropProb:              1.0 / (TPS),
-	PheromoneInfluence:             1.0,
-	PheromoneSenseProb:             1.0 / 2.5,
+	PheromoneInfluence:             3.0,
+	PheromoneSenseProb:             1.0 / 4,
 }
 
 type Food struct {

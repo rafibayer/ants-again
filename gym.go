@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	// run for 1 simulated minute
-	GYM_SIM_TIME = 60 * TPS
+	// run for x simulated minutes
+	GYM_SIM_TIME = 180 * TPS
 	GYM_SAMPLES  = 4
 
 	// concurrency controls
@@ -38,13 +38,15 @@ func runGym() error {
 		go func() {
 			for iteration := range jobs {
 				params := Params{
-					AntSpeed:             util.Rand(0.5, 2.5),
-					AntRotation:          util.Rand(0.0, 20.0),
-					PheromoneSenseRadius: util.Rand(GAME_SIZE/50, GAME_SIZE/4),
-					PheromoneDecay:       float32(util.Rand(1/120.0, 1/1.0)),
-					PheromoneDropProb:    util.Rand(1/180.0, 1/1.0),
-					PheromoneInfluence:   util.Rand(0.1, 10.0),
-					PheromoneSenseProb:   util.Rand(0.05, 1.0),
+					AntSpeed:                       util.Rand(0.5, 2.5),
+					AntRotation:                    util.Rand(0.0, 20.0),
+					AntPheromoneStart:              util.RandInt(5, 120),
+					PheromoneSenseRadius:           util.Rand(GAME_SIZE/50, GAME_SIZE/4),
+					PheromoneSenseCosineSimilarity: util.Rand(-1.0, 1.0),
+					PheromoneDecay:                 float32(util.Rand(1/120.0, 1/1.0)),
+					PheromoneDropProb:              util.Rand(1/180.0, 1/1.0),
+					PheromoneInfluence:             util.Rand(0.1, 10.0),
+					PheromoneSenseProb:             util.Rand(0.05, 1.0),
 				}
 
 				scores, stats := runSamples(params)
@@ -68,7 +70,7 @@ func runGym() error {
 
 	defer func() {
 		log.Printf(
-			"best: %d food collected\nparams: %+v\nstats: %+v",
+			"best: %d food collected\nparams: %#v\nstats: %#v",
 			bestCollected, bestParams, bestStats,
 		)
 	}()
@@ -101,8 +103,8 @@ func runGym() error {
 			log.Printf("[%d] New Best: %d", res.iteration, res.median)
 			log.Printf("[%d] Scores: min=%d median=%d max=%d",
 				res.iteration, minScore, res.median, maxScore)
-			log.Printf("Params: %+v", res.params)
-			log.Printf("Stats (median sample): %+v", res.medianSt)
+			log.Printf("Params: %#v", res.params)
+			log.Printf("Stats (median sample): %#v", res.medianSt)
 		}
 	}
 
@@ -126,7 +128,7 @@ func runSamples(params Params) ([]int, []Stats) {
 
 				for range GYM_SIM_TIME {
 					if err := game.Update(); err != nil {
-						log.Printf("error: %v\nparams: %+v", err, params)
+						log.Printf("error: %v\nparams: %#v", err, params)
 					}
 				}
 

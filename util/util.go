@@ -15,6 +15,11 @@ func Rand(min, max float64) float64 {
 	return min + rand.Float64()*(max-min)
 }
 
+// [min, max)
+func RandInt(min, max int) int {
+	return rand.IntN(max-min) + min
+}
+
 func Clamp(low, x, high float64) float64 {
 	if x < low {
 		return low
