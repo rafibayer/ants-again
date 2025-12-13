@@ -17,18 +17,16 @@ const (
 )
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	// screen.Clear()
-	// g.world.Clear()
 
 	drawScreenSpace(g, screen)
 	drawWorldSpace(g)
 
-	screen.DrawImage(g.world, g.getCameraOpts())
+	screen.DrawImage(g.world, g.cameraOpts())
 
 	g.frameCount++
 }
 
-func (g *Game) getCameraOpts() *ebiten.DrawImageOptions {
+func (g *Game) cameraOpts() *ebiten.DrawImageOptions {
 	// translate op for drawing world in screen space with pan and zoom
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(-g.camX, -g.camY)       // Pan (world space)
@@ -47,7 +45,6 @@ func drawScreenSpace(g *Game, screen *ebiten.Image) {
 func drawWorldSpace(g *Game) {
 	// has to be first because of use of "writePixels"
 	g.drawPheromones()
-
 	// g.naiveDrawPheromones()
 
 	g.drawAnts()
@@ -59,14 +56,7 @@ func drawWorldSpace(g *Game) {
 }
 
 func (g *Game) drawAnts() {
-	for i, ant := range g.ants {
-
-		// debug circle -- food search area
-		// if i%100 == 0 {
-		// 	vector.StrokeCircle(g.world, float32(ant.X), float32(ant.Y), float32(PHEROMONE_SENSE_RADIUS), 1.0, color.White, false)
-		// }
-		_ = i
-
+	for _, ant := range g.ants {
 		// 1 away from ant facing
 		tail := ant.Add(ant.dir.Normalize().Mul(-5))
 

@@ -7,81 +7,26 @@ import (
 	"github.com/rafibayer/ants-again/vector"
 )
 
-// todo: time based things should be relative to TPS.. I think?
-// we want the same stuff to happen, but faster if we increase TPS
 const (
 	TPS       = 60
 	GAME_SIZE = 1000
+	ANTS      = 1000
 
 	ANT_FOOD_RADIUS = GAME_SIZE / 200.0 // radius in which an ant will pick up food
 	ANT_HILL_RADIUS = GAME_SIZE / 30.0  // radius in which an ant will return to hill
 	ANT_BOUNDARY    = TURN              // if true, ants will wrap around to the other side instead of turning at boundaries
 
-	FOOD_START = 50
+	FOOD_START = 50 // starting amount per food
 )
 
-type Params struct {
-	AntSpeed          float64 // 2.5
-	AntRotation       float64 // 9.0
-	AntPheromoneStart int     // 30
-
-	PheromoneSenseRadius           float64 // 166.67 = (game_size / 6.0)
-	PheromoneSenseCosineSimilarity float64 // 0.33
-	PheromoneDecay                 float32 // 0.001111 = (1.0 / TPS) / 15.0
-	PheromoneDropProb              float64 // 0.008333 = 1.0 / (2 * TPS)
-	PheromoneInfluence             float64 // 2.0
-	PheromoneSenseProb             float64 // 1.0 / 5.0
-}
-
-var DefaultParams = Params{
-	AntSpeed:                       1.8,
-	AntRotation:                    9.0,
-	AntPheromoneStart:              20,
-	PheromoneSenseRadius:           GAME_SIZE / 10.0,
-	PheromoneSenseCosineSimilarity: 0.33,
-	PheromoneDecay:                 1.0 / (10 * TPS),
-	PheromoneDropProb:              1.0 / (TPS),
-	PheromoneInfluence:             3.0,
-	PheromoneSenseProb:             1.0 / 4,
-}
-
-type Food struct {
-	// Position
-	*vector.Vector
-
-	amount int
-}
-
-type AntState int
-
+// spatial hash densities
+// these are fairly import perf knobs, especially for pheromones.
+// if these are missized the cells either get too crowded or we have to search too many of them
 const (
-	FORAGE AntState = iota
-	RETURN
+	PHEROMONE_HASH_CELL_SIZE = GAME_SIZE / 20.0
+	FOOD_HASH_CELL_SIZE      = GAME_SIZE / 20.0
+	HILL_HASH_CELL_SIZE      = GAME_SIZE / 5.0
 )
-
-type Ant struct {
-	// position
-	vector.Vector
-
-	dir   vector.Vector
-	state AntState
-
-	pheromoneStored int
-}
-
-type BoundaryBehavior int
-
-const (
-	WRAP BoundaryBehavior = iota
-	TURN
-)
-
-type Pheromone struct {
-	// position
-	*vector.Vector
-
-	amount float32
-}
 
 type Game struct {
 	params *Params
@@ -114,10 +59,10 @@ func NewGame(params *Params) *Game {
 	}
 
 	ants := []*Ant{}
-	food := spatial.NewHash[*Food](GAME_SIZE / 100.0)
-	hills := spatial.NewHash[vector.Vector](GAME_SIZE / 5.0)
+	food := spatial.NewHash[*Food](FOOD_HASH_CELL_SIZE)
+	hills := spatial.NewHash[vector.Vector](HILL_HASH_CELL_SIZE)
 
-	for range 1000 {
+	for range ANTS {
 		ants = append(ants, &Ant{
 			Vector:          vector.Vector{X: GAME_SIZE / 2, Y: GAME_SIZE / 2},
 			dir:             vector.Vector{X: util.Rand(-1, 1), Y: util.Rand(-1, 1)},
@@ -166,10 +111,8 @@ func NewGame(params *Params) *Game {
 		food:  food,
 		hills: hills,
 
-		// spatial hash size his a fairly import perf knob -- if these are missized,
-		// the cells get too crowded, or we have to search too many of them
-		foragingPheromone:  spatial.NewHash[*Pheromone](GAME_SIZE / 20),
-		returningPheromone: spatial.NewHash[*Pheromone](GAME_SIZE / 20),
+		foragingPheromone:  spatial.NewHash[*Pheromone](PHEROMONE_HASH_CELL_SIZE),
+		returningPheromone: spatial.NewHash[*Pheromone](PHEROMONE_HASH_CELL_SIZE),
 	}
 }
 
@@ -181,169 +124,6 @@ func (g *Game) Update() error {
 
 	g.tickCount++
 	return nil
-}
-
-func (g *Game) updateAnts() {
-	g.foragingAntCount = 0
-	g.returningAntCount = 0
-
-	// update each ant, add to next and state
-	for _, ant := range g.ants {
-		ant.Vector = ant.Add(ant.dir.Normalize().Mul(float64(g.params.AntSpeed)))
-
-		keepInbounds(ant)
-
-		if util.Chance(g.params.PheromoneSenseProb) {
-			// pheromone field to search based on ant state
-			pheromone := g.returningPheromone
-			if ant.state == RETURN {
-				pheromone = g.foragingPheromone
-			}
-
-			// influence direction based on pheromone
-			pheromoneDir := vector.ZERO
-
-			nearby := pheromone.RadialSearchIter(ant.Vector, g.params.PheromoneSenseRadius)
-
-			for pher := range nearby {
-				// direction to pheromone and signal strength
-				dirToSpot := pher.Sub(ant.Vector).Normalize()
-
-				// scale by weight, distance to ant, and angular similarity
-				strength := float64(pher.amount)
-				strength = strength / max(0.1, ant.Vector.Distance(*pher.Vector)) // prevent overweighting really close smells
-
-				cosineSim := ant.dir.CosineSimilarity(dirToSpot)
-				if cosineSim < g.params.PheromoneSenseCosineSimilarity {
-					strength *= 0
-				}
-				strength *= cosineSim
-
-				pheromoneDir = pheromoneDir.Add(dirToSpot.Mul(strength))
-			}
-
-			ant.dir = ant.dir.Add(pheromoneDir.Mul(g.params.PheromoneInfluence))
-			ant.dir = ant.dir.Normalize()
-		}
-
-		if ant.state == FORAGE {
-			g.foragingAntCount++
-			// check for food nearby, change state and turn around
-			nearFood := g.food.RadialSearchIter(ant.Vector, ANT_FOOD_RADIUS)
-
-			for food := range nearFood {
-				if food.amount > 0 {
-					ant.state = RETURN
-					food.amount--
-					ant.dir = ant.dir.Mul(-1.0)
-					ant.pheromoneStored = g.params.AntPheromoneStart
-					break // only grab 1 food
-				}
-			}
-		}
-
-		if ant.state == RETURN {
-			g.returningAntCount++
-			nearHill := g.hills.RadialSearchIter(ant.Vector, ANT_HILL_RADIUS)
-
-			// check for hill nearby, change state and turn around
-			for range nearHill {
-				// turn around and go back to foraging
-				ant.state = FORAGE
-				g.collectedFood++
-				ant.dir = ant.dir.Mul(-1.0)
-				ant.pheromoneStored = g.params.AntPheromoneStart
-				break
-			}
-		}
-
-		if ant.pheromoneStored > 0 && util.Chance(g.params.PheromoneDropProb) {
-			ant.pheromoneStored--
-			switch ant.state {
-			case FORAGE:
-				g.foragingPheromone.Insert(&Pheromone{Vector: &vector.Vector{X: ant.X, Y: ant.Y}, amount: 1.0})
-			case RETURN:
-				g.returningPheromone.Insert(&Pheromone{Vector: &vector.Vector{X: ant.X, Y: ant.Y}, amount: 1.0})
-			}
-		}
-
-		// randomly rotate a few degrees
-		ant.dir = ant.dir.Rotate(util.Rand(-g.params.AntRotation, g.params.AntRotation))
-	}
-}
-
-func keepInbounds(ant *Ant) {
-	if ANT_BOUNDARY == WRAP {
-		if ant.Y < 0 {
-			ant.Y = GAME_SIZE
-		}
-		if ant.Y >= GAME_SIZE {
-			ant.Y = 0
-		}
-		if ant.X < 0 {
-			ant.X = GAME_SIZE
-		}
-		if ant.X >= GAME_SIZE {
-			ant.X = 0
-		}
-	}
-
-	if ANT_BOUNDARY == TURN {
-		if ant.Y < 0 {
-			ant.dir.Y = 1
-		}
-		if ant.Y >= GAME_SIZE {
-			ant.dir.Y = -1
-		}
-		if ant.X < 0 {
-			ant.dir.X = 1
-		}
-		if ant.X >= GAME_SIZE {
-			ant.dir.X = -1
-		}
-	}
-}
-
-func (g *Game) updatePheromones() {
-	toRemove := make([]*Pheromone, 0)
-	for pher := range g.foragingPheromone.PointsIter() {
-		pher.amount -= g.params.PheromoneDecay
-		if pher.amount <= 0 {
-			toRemove = append(toRemove, pher)
-		}
-	}
-
-	for _, r := range toRemove {
-		g.foragingPheromone.Remove(r)
-	}
-
-	toRemove = make([]*Pheromone, 0)
-	for pher := range g.returningPheromone.PointsIter() {
-		pher.amount -= g.params.PheromoneDecay
-		if pher.amount <= 0 {
-			toRemove = append(toRemove, pher)
-		}
-	}
-
-	for _, r := range toRemove {
-		g.returningPheromone.Remove(r)
-	}
-}
-
-func (g *Game) updateFood() {
-	g.remainingFoodCount = 0
-
-	toRemove := make([]*Food, 0)
-	for food := range g.food.PointsIter() {
-		g.remainingFoodCount += food.amount
-		if food.amount <= 0 {
-			toRemove = append(toRemove, food)
-		}
-	}
-
-	for _, r := range toRemove {
-		g.food.Remove(r)
-	}
 }
 
 func (g *Game) pollInput() {
