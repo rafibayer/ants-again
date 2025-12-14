@@ -33,7 +33,6 @@ func (g *Game) updateAnts() {
 	g.foragingAntCount = 0
 	g.returningAntCount = 0
 
-	// update each ant, add to next and state
 	for _, ant := range g.ants {
 		ant.Vector = ant.Add(ant.dir.Normalize().Mul(float64(g.params.AntSpeed)))
 

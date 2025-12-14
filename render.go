@@ -57,7 +57,6 @@ func drawWorldSpace(g *Game) {
 
 func (g *Game) drawAnts() {
 	for _, ant := range g.ants {
-		// 1 away from ant facing
 		tail := ant.Add(ant.dir.Normalize().Mul(-5))
 
 		c := GREEN
