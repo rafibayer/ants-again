@@ -1,4 +1,3 @@
-go tool pprof cpu.prof
-go tool pprof -dot cpu.prof > cpu.dot
-go tool pprof -dot mem.prof > mem.dot
+[`ants-again`](https://github.com/rafibayer/ants-again) is an ant pheromone simulation written in Go and compiled for WASM using [ebitengine](https://ebitengine.org/).
 
+![screenshot](ants.png)
