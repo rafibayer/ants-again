@@ -1,8 +1,83 @@
 <!DOCTYPE html>
-<script src="wasm_exec.js"></script>
-<script>
-const go = new Go();
-WebAssembly.instantiateStreaming(fetch("ants_again.wasm"), go.importObject).then(result => {
-    go.run(result.instance);
-});
-</script>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>Ants Again</title>
+  <style>
+    body {
+      margin: 0;
+      background: #111;
+      color: white;
+      font-family: sans-serif;
+    }
+
+    #game {
+      width: 90%;
+      height: 90%;
+      position: relative;
+      background: black;
+    }
+
+    /* Ebiten canvas fills parent and preserves aspect ratio */
+    #game canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Controls below game */
+    #controls {
+      padding: 12px;
+      background: #222;
+    }
+
+    input[type="range"] {
+      width: 100px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Game container -->
+  <div id="game"></div>
+
+  <!-- Controls container -->
+  <!-- todo: can we populate initial values automatically instead of having to copy? -->
+  <div id="controls">
+    <label style="display: flex; align-items: center; gap: 8px;">
+      Ant Speed:
+      <input id="antSpeed" type="range" min="0.5" max="5.0" step="0.1" value="1.8">
+    </label>
+    <label style="display: flex; align-items: center; gap: 8px;">
+      Ant Rotation Randomness:
+      <input id="antRotation" type="range" min="0.0" max="20" step="1.0" value="9.0">
+    </label>
+    <label style="display: flex; align-items: center; gap: 8px;">
+      Pheromone Sense Range:
+      <input id="pheromoneSenseRadius" type="range" min="50.0" max="250.0" step="50.0" value="100.0">
+    </label>
+  </div>
+
+  <!-- Ebiten WASM -->
+  <script src="wasm_exec.js"></script>
+  <script>
+    const go = new Go();
+
+    WebAssembly.instantiateStreaming(fetch("ants_again.wasm"), go.importObject)
+      .then(result => {
+        go.run(result.instance);
+
+        // Move the automatically created canvas into #game
+        const canvas = document.querySelector("canvas");
+        const gameDiv = document.getElementById("game");
+        gameDiv.appendChild(canvas);
+      });
+  </script>
+
+</body>
+
+</html>

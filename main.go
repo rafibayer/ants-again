@@ -38,7 +38,7 @@ func main() {
 
 			var params *Params
 			game := NewGame(params)
-			ebiten.SetWindowSize(800, 600)
+			ebiten.SetWindowSize(800, 800)
 			ebiten.SetWindowTitle("Hello, World!")
 			if err := ebiten.RunGame(game); err != nil {
 				log.Fatal(err)

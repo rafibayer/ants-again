@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/rafibayer/ants-again/control"
 	"github.com/rafibayer/ants-again/spatial"
 	"github.com/rafibayer/ants-again/util"
 	"github.com/rafibayer/ants-again/vector"
@@ -35,6 +36,7 @@ type Game struct {
 
 	camX, camY float64
 	zoom       float64
+	controls   control.State
 
 	world *ebiten.Image
 	px    []byte // pixel buffer: width * height * 4 (R,G,B,A)
@@ -118,34 +120,11 @@ func NewGame(params *Params) *Game {
 
 func (g *Game) Update() error {
 	g.pollInput()
+
 	g.updateAnts()
 	g.updatePheromones()
 	g.updateFood()
 
 	g.tickCount++
 	return nil
-}
-
-func (g *Game) pollInput() {
-	// Camera movement
-	if ebiten.IsKeyPressed(ebiten.KeyW) {
-		g.camY -= 4
-	}
-	if ebiten.IsKeyPressed(ebiten.KeyS) {
-		g.camY += 4
-	}
-	if ebiten.IsKeyPressed(ebiten.KeyA) {
-		g.camX -= 4
-	}
-	if ebiten.IsKeyPressed(ebiten.KeyD) {
-		g.camX += 4
-	}
-
-	// Zoom
-	if ebiten.IsKeyPressed(ebiten.KeyQ) {
-		g.zoom *= 1.02
-	}
-	if ebiten.IsKeyPressed(ebiten.KeyE) {
-		g.zoom *= 0.98
-	}
 }

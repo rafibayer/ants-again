@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	screenW = 800
-	screenH = 600
+	screenW = 700
+	screenH = 700
 )
 
 func (g *Game) Draw(screen *ebiten.Image) {
