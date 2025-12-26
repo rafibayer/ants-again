@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/rafibayer/ants-again/control"
 )
 
 func (g *Game) pollInput() {
@@ -26,13 +25,5 @@ func (g *Game) pollInput() {
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyE) {
 		g.zoom *= 0.98
-	}
-
-	// apply control state to game
-	state := control.Control.State()
-	if state != nil {
-		g.params.AntSpeed = state.AntSpeed
-		g.params.AntRotation = state.AntRotation
-		g.params.PheromoneSenseRadius = state.PheromoneSenseRadius
 	}
 }

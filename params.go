@@ -11,6 +11,9 @@ type Params struct {
 	PheromoneDropProb              float64 // probability for an ant to drop pheromone per tick. (suggested: 0.008333 = 1.0 / (2 * TPS))
 	PheromoneInfluence             float64 // pheromone influence multiplier (suggested: 2.0)
 	PheromoneSenseProb             float64 // probability of an ant sensing pheromones per tick. expensive. (suggested: 1.0 / 4.0)
+
+	// Debug Params
+	DebugDrawSensorRange bool
 }
 
 // Default parameters if nil is passed to NewGame.

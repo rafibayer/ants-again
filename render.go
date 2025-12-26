@@ -17,6 +17,7 @@ const (
 )
 
 func (g *Game) Draw(screen *ebiten.Image) {
+	g.ui.Draw(screen)
 
 	drawScreenSpace(g, screen)
 	drawWorldSpace(g)
@@ -56,9 +57,15 @@ func drawWorldSpace(g *Game) {
 }
 
 func (g *Game) drawAnts() {
-	for _, ant := range g.ants {
-		tail := ant.Add(ant.dir.Normalize().Mul(-5))
+	const DEBUG_SENSOR_RATIO = 100
 
+	for i, ant := range g.ants {
+		// debug sensor radius
+		if g.params.DebugDrawSensorRange && i%DEBUG_SENSOR_RATIO == 0 {
+			vector.StrokeCircle(g.world, float32(ant.X), float32(ant.Y), float32(g.params.PheromoneSenseRadius), 2.0, WHITE, false)
+		}
+
+		tail := ant.Add(ant.dir.Normalize().Mul(-5))
 		c := GREEN
 		if ant.state == RETURN {
 			c = LILAC

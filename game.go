@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
+
+	"github.com/ebitengine/debugui"
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/rafibayer/ants-again/control"
 	"github.com/rafibayer/ants-again/spatial"
 	"github.com/rafibayer/ants-again/util"
 	"github.com/rafibayer/ants-again/vector"
@@ -31,12 +33,12 @@ const (
 
 type Game struct {
 	params *Params
+	ui     debugui.DebugUI
 
 	frameCount, tickCount int
 
 	camX, camY float64
 	zoom       float64
-	controls   control.State
 
 	world *ebiten.Image
 	px    []byte // pixel buffer: width * height * 4 (R,G,B,A)
@@ -98,7 +100,8 @@ func NewGame(params *Params) *Game {
 	hills.Insert(vector.Vector{X: GAME_SIZE / 2, Y: GAME_SIZE / 2})
 
 	return &Game{
-		params:     params,
+		params: params,
+
 		frameCount: 0,
 		tickCount:  0,
 
@@ -119,6 +122,10 @@ func NewGame(params *Params) *Game {
 }
 
 func (g *Game) Update() error {
+	if _, err := g.ui.Update(ui(g)); err != nil {
+		return fmt.Errorf("error updating ui: %w", err)
+	}
+
 	g.pollInput()
 
 	g.updateAnts()
