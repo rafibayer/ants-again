@@ -37,6 +37,12 @@ func (g *Game) cameraOpts() *ebiten.DrawImageOptions {
 	return op
 }
 
+func (g *Game) screenToWorldSpace(x float64, y float64) (float64, float64) {
+	inv := g.cameraOpts()
+	inv.GeoM.Invert()
+	return inv.GeoM.Apply(x, y)
+}
+
 func drawScreenSpace(g *Game, screen *ebiten.Image) {
 	stats := g.Stats()
 	ebitenutil.DebugPrint(screen, fmt.Sprintf("%+v", stats))
@@ -51,6 +57,7 @@ func drawWorldSpace(g *Game) {
 	g.drawAnts()
 	g.drawFood()
 	g.drawHills()
+	g.drawObstacles()
 
 	// game world bounding box
 	vector.StrokeRect(g.world, 0, 0, GAME_SIZE, GAME_SIZE, 5, color.White, false)
@@ -77,8 +84,8 @@ func (g *Game) drawAnts() {
 
 func (g *Game) drawFood() {
 	for food := range g.food.PointsIter() {
-		c := Fade(BROWN, float32(food.amount/FOOD_START))
-		vector.FillRect(g.world, float32(food.X), float32(food.Y), 1.5, 1.5, c, false)
+		c := Fade(BROWN, float32(food.amount)/float32(FOOD_START))
+		vector.FillRect(g.world, float32(food.X), float32(food.Y), ANT_FOOD_RADIUS, ANT_FOOD_RADIUS, c, true)
 	}
 }
 
@@ -129,6 +136,13 @@ func (g *Game) naiveDrawPheromones() {
 	for pher := range g.returningPheromone.PointsIter() {
 		c := Fade(DARK_LILAC, pher.amount)
 		vector.FillRect(g.world, float32(pher.X), float32(pher.Y), 3.0, 3.0, c, false)
+	}
+}
+
+func (g *Game) drawObstacles() {
+	for obs := range g.obstacles.PointsIter() {
+		// obstacles position represented by top left of square
+		vector.FillRect(g.world, float32(obs.X), float32(obs.Y), OBSTACLE_HASH_CELL_SIZE, OBSTACLE_HASH_CELL_SIZE, GRAY, false)
 	}
 }
 

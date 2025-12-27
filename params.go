@@ -12,6 +12,8 @@ type Params struct {
 	PheromoneInfluence             float64 // pheromone influence multiplier (suggested: 2.0)
 	PheromoneSenseProb             float64 // probability of an ant sensing pheromones per tick. expensive. (suggested: 1.0 / 4.0)
 
+	BoundaryModeIndex int
+
 	// Debug Params
 	DebugDrawSensorRange bool
 }

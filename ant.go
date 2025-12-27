@@ -22,21 +22,38 @@ type Ant struct {
 	pheromoneStored int
 }
 
-type BoundaryBehavior int
+type BoundaryMode int
 
 const (
-	WRAP BoundaryBehavior = iota
-	TURN
+	BoundaryTurn BoundaryMode = iota
+	BoundaryWrap
 )
+
+var boundaryModes = []string{"turn", "wrap"}
 
 func (g *Game) updateAnts() {
 	g.foragingAntCount = 0
 	g.returningAntCount = 0
 
 	for _, ant := range g.ants {
-		ant.Vector = ant.Add(ant.dir.Normalize().Mul(float64(g.params.AntSpeed)))
+		destination := ant.Add(ant.dir.Normalize().Mul(g.params.AntSpeed))
 
-		keepInbounds(ant)
+		push := vector.ZERO
+		for obs := range g.obstacles.RadialSearchIter(destination, OBSTACLE_HASH_CELL_SIZE) {
+			delta := ant.Vector.Sub(obs.Vector)
+			if delta.Magnitude() > 0 {
+				push = push.Add(delta.Normalize())
+			}
+		}
+
+		if push == vector.ZERO {
+			ant.Vector = ant.Add(ant.dir.Normalize().Mul(g.params.AntSpeed))
+		} else {
+			avoid := push.Normalize()
+			ant.dir = ant.dir.Add(avoid.Mul(g.params.AntSpeed)).Normalize()
+		}
+
+		g.keepInbounds(ant)
 
 		if util.Chance(g.params.PheromoneSenseProb) {
 			// pheromone field to search based on ant state
@@ -117,10 +134,12 @@ func (g *Game) updateAnts() {
 	}
 }
 
-func keepInbounds(ant *Ant) {
+func (g *Game) keepInbounds(ant *Ant) {
+	mode := BoundaryMode(g.params.BoundaryModeIndex)
+
 	// wrapping behavior: ant teleports to other side when it hits boundary,
-	//  retaints direction.
-	if ANT_BOUNDARY == WRAP {
+	// retains direction.
+	if mode == BoundaryWrap {
 		if ant.Y < 0 {
 			ant.Y = GAME_SIZE
 		}
@@ -136,8 +155,8 @@ func keepInbounds(ant *Ant) {
 	}
 
 	// turn behavior: ant turns around when it hits boundary,
-	// retains position
-	if ANT_BOUNDARY == TURN {
+	// retains position.
+	if mode == BoundaryTurn {
 		if ant.Y < 0 {
 			ant.dir.Y = 1
 		}

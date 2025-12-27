@@ -5,6 +5,8 @@ import "image/color"
 var (
 	WHITE = color.RGBA{R: 255, G: 255, B: 255, A: 255}
 
+	GRAY = Fade(WHITE, 0.66)
+
 	GREEN      = color.RGBA{R: 0, G: 255, B: 0, A: 255}
 	DARK_GREEN = color.RGBA{R: 0, G: 191, B: 0, A: 255}
 

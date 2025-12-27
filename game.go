@@ -17,7 +17,6 @@ const (
 
 	ANT_FOOD_RADIUS = GAME_SIZE / 200.0 // radius in which an ant will pick up food
 	ANT_HILL_RADIUS = GAME_SIZE / 30.0  // radius in which an ant will return to hill
-	ANT_BOUNDARY    = TURN              // if true, ants will wrap around to the other side instead of turning at boundaries
 
 	FOOD_START = 50 // starting amount per food
 )
@@ -29,11 +28,16 @@ const (
 	PHEROMONE_HASH_CELL_SIZE = GAME_SIZE / 20.0
 	FOOD_HASH_CELL_SIZE      = GAME_SIZE / 20.0
 	HILL_HASH_CELL_SIZE      = GAME_SIZE / 5.0
+
+	OBSTACLE_HASH_CELL_SIZE = GAME_SIZE / 100.0
 )
 
 type Game struct {
 	params *Params
-	ui     debugui.DebugUI
+
+	ui              debugui.DebugUI
+	uiCapture       bool
+	cursorModeIndex int
 
 	frameCount, tickCount int
 
@@ -45,6 +49,8 @@ type Game struct {
 
 	ants []*Ant
 	food spatial.Spatial[*Food]
+
+	obstacles spatial.Spatial[*Obstacle]
 
 	hills         spatial.Spatial[vector.Vector]
 	collectedFood int
@@ -112,9 +118,10 @@ func NewGame(params *Params) *Game {
 		world: ebiten.NewImage(GAME_SIZE, GAME_SIZE),
 		px:    make([]byte, GAME_SIZE*GAME_SIZE*4), // pheromone buffer: 4 bytes per pixel (R,G,B,A)
 
-		ants:  ants,
-		food:  food,
-		hills: hills,
+		ants:      ants,
+		food:      food,
+		hills:     hills,
+		obstacles: spatial.NewHash[*Obstacle](OBSTACLE_HASH_CELL_SIZE),
 
 		foragingPheromone:  spatial.NewHash[*Pheromone](PHEROMONE_HASH_CELL_SIZE),
 		returningPheromone: spatial.NewHash[*Pheromone](PHEROMONE_HASH_CELL_SIZE),
@@ -122,9 +129,12 @@ func NewGame(params *Params) *Game {
 }
 
 func (g *Game) Update() error {
-	if _, err := g.ui.Update(ui(g)); err != nil {
+
+	capture, err := g.ui.Update(ui(g))
+	if err != nil {
 		return fmt.Errorf("error updating ui: %w", err)
 	}
+	g.uiCapture = capture > 0
 
 	g.pollInput()
 
