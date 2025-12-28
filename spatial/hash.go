@@ -40,7 +40,7 @@ func (h *Hash[T]) Insert(p T) {
 }
 
 func (h *Hash[T]) Points() []T {
-	result := make([]T, h.Len())
+	result := make([]T, 0, h.Len())
 	for _, cell := range h.cells {
 		result = append(result, cell...)
 	}
