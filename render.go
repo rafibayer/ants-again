@@ -85,7 +85,7 @@ func (g *Game) drawAnts() {
 func (g *Game) drawFood() {
 	for food := range g.food.PointsIter() {
 		c := Fade(BROWN, float32(food.amount)/float32(FOOD_START))
-		vector.FillRect(g.world, float32(food.X), float32(food.Y), ANT_FOOD_RADIUS, ANT_FOOD_RADIUS, c, true)
+		vector.FillRect(g.world, float32(food.X), float32(food.Y), ANT_FOOD_RADIUS, ANT_FOOD_RADIUS, c, false)
 	}
 }
 
