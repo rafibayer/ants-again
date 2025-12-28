@@ -43,6 +43,10 @@ func (g *Game) pollInput() {
 		return
 	}
 
+	g.handleEdit()
+}
+
+func (g *Game) handleEdit() {
 	xs, ys := ebiten.CursorPosition()
 	xw, yw := g.screenToWorldSpace(float64(xs), float64(ys))
 	v := vector.Vector{X: xw, Y: yw}
@@ -52,8 +56,18 @@ func (g *Game) pollInput() {
 	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
 		switch cursorMode {
 		case CursorModeFood:
+			near := g.food.RadialSearchIter(v, ANT_FOOD_RADIUS/2.0)
+			for range near {
+				// don't place if there is food nearby already
+				return
+			}
 			g.food.Insert(&Food{amount: FOOD_START, Vector: &v})
 		case CursorModeObstacle:
+			near := g.obstacles.RadialSearchIter(v, OBSTACLE_HASH_CELL_SIZE/2.0)
+			for range near {
+				// don't place if there is obstacle nearby already
+				return
+			}
 			g.obstacles.Insert(&Obstacle{Vector: v})
 		default:
 		}

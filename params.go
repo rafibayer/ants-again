@@ -22,10 +22,10 @@ type Params struct {
 var DefaultParams = Params{
 	AntSpeed:                       1.8,
 	AntRotation:                    9.0,
-	AntPheromoneStart:              10,
+	AntPheromoneStart:              25,
 	PheromoneSenseRadius:           GAME_SIZE / 10.0,
 	PheromoneSenseCosineSimilarity: 0.33,
-	PheromoneDecay:                 1.0 / (10 * TPS),
+	PheromoneDecay:                 1.0 / (15 * TPS),
 	PheromoneDropProb:              1.0 / (TPS),
 	PheromoneInfluence:             3.0,
 	PheromoneSenseProb:             1.0 / 4,
