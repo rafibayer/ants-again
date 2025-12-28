@@ -25,8 +25,8 @@ var DefaultParams = Params{
 	AntPheromoneStart:              25,
 	PheromoneSenseRadius:           GAME_SIZE / 10.0,
 	PheromoneSenseCosineSimilarity: 0.33,
-	PheromoneDecay:                 1.0 / (15 * TPS),
-	PheromoneDropProb:              1.0 / (TPS),
+	PheromoneDecay:                 1.0 / (10 * TPS),
+	PheromoneDropProb:              1.0 / (1.5 * TPS),
 	PheromoneInfluence:             3.0,
 	PheromoneSenseProb:             1.0 / 4,
 }
