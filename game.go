@@ -111,8 +111,8 @@ func NewGame(params *Params) *Game {
 		frameCount: 0,
 		tickCount:  0,
 
-		camX: 100,
-		camY: 150,
+		camX: 30,
+		camY: 170,
 		zoom: 0.5,
 
 		world: ebiten.NewImage(GAME_SIZE, GAME_SIZE),
@@ -129,7 +129,6 @@ func NewGame(params *Params) *Game {
 }
 
 func (g *Game) Update() error {
-
 	capture, err := g.ui.Update(ui(g))
 	if err != nil {
 		return fmt.Errorf("error updating ui: %w", err)
